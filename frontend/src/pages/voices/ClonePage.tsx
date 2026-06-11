@@ -267,7 +267,7 @@ export default function ClonePage() {
               <div style={{ marginTop: 18 }}>
                 <label className="label">Base Model</label>
                 <select className="input select" disabled style={{ marginBottom: 16 }}>
-                  <option>XTTS-v2 (Default High-Quality Model)</option>
+                  <option>Chatterbox Turbo (Fast Zero-Shot Cloning)</option>
                 </select>
 
                 <label className="label">Clone mode</label>

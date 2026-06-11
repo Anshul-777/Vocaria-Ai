@@ -178,13 +178,41 @@ async def _run_sync_generation(
         if selected_model == "chatterbox-turbo":
             from app.ml.tts_pipeline import get_chatterbox_pipeline
             tts = get_chatterbox_pipeline()
-            audio_bytes, sr = await tts.synthesize(
-                text=job.text,
-                exaggeration=body.exaggeration,
-                cfg_weight=body.cfg_weight,
-                temperature=body.temperature or 0.8,
-                output_format=job.output_format or "wav",
-            )
+            
+            # Fetch the voice profile's reference audio if a voice is selected
+            reference_audio_path = None
+            if body.voice_preset:
+                result = await db.execute(select(VoiceProfile).where(VoiceProfile.id == body.voice_preset))
+                vp = result.scalar_one_or_none()
+                if vp and vp.embedding_path:
+                    # Download the reference audio to a temp file
+                    storage = await get_storage()
+                    try:
+                        content = await storage.download(settings.BUCKET_SAMPLES, vp.embedding_path)
+                        import tempfile
+                        import os
+                        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                            f.write(content)
+                            reference_audio_path = f.name
+                    except Exception as e:
+                        logger.error(f"Failed to fetch reference audio for Chatterbox: {e}")
+
+            try:
+                audio_bytes, sr = await tts.synthesize(
+                    text=job.text,
+                    speaker_wav=reference_audio_path,
+                    exaggeration=body.exaggeration,
+                    cfg_weight=body.cfg_weight,
+                    temperature=body.temperature or 0.8,
+                    output_format=job.output_format or "wav",
+                )
+            finally:
+                if reference_audio_path:
+                    import os
+                    try:
+                        os.unlink(reference_audio_path)
+                    except Exception:
+                        pass
         else:
             from app.ml.tts_pipeline import get_tts_pipeline
             tts = get_tts_pipeline()

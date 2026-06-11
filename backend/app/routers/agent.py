@@ -302,11 +302,11 @@ Also answer general questions. Be concise, helpful, and technical when needed. R
                 with httpx.Client() as http_client:
                     resp = http_client.post(
                         "https://api.groq.com/openai/v1/chat/completions",
-                        headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+                        headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}", "Content-Type": "application/json"},
                         json={"model": "llama-3.1-8b-instant", "messages": groq_messages, "temperature": 0.7, "stream": True},
                         timeout=15.0
                     )
-                    
+                
                     if resp.status_code == 200:
                         for line in resp.iter_lines():
                             if line.startswith("data: "):
