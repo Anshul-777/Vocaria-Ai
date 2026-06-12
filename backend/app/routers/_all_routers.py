@@ -154,7 +154,13 @@ async def upload_voice_sample(
         duration = audio_info.duration
         sample_rate = audio_info.samplerate
     except Exception:
-        duration, sample_rate = 0.0, 16000
+        try:
+            from pydub import AudioSegment
+            seg = AudioSegment.from_file(_io.BytesIO(content))
+            duration = len(seg) / 1000.0
+            sample_rate = seg.frame_rate
+        except Exception:
+            duration, sample_rate = 0.0, 16000
 
     if duration < settings.MIN_SAMPLE_DURATION_SEC:
         raise HTTPException(400, f"Sample too short ({duration:.1f}s). Minimum {settings.MIN_SAMPLE_DURATION_SEC}s required.")
@@ -1013,7 +1019,15 @@ async def analyze_audio_quality(
         import io as _io
         import librosa
         import numpy as np
-        audio, sr = sf.read(_io.BytesIO(content))
+        try:
+            audio, sr = sf.read(_io.BytesIO(content))
+        except Exception:
+            from pydub import AudioSegment
+            seg = AudioSegment.from_file(_io.BytesIO(content))
+            seg = seg.set_channels(1)
+            audio = np.array(seg.get_array_of_samples(), dtype=np.float32) / 32768.0
+            sr = seg.frame_rate
+
         if audio.ndim > 1:
             audio = audio.mean(axis=1)
         audio = audio.astype(np.float32)

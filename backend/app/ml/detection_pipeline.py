@@ -143,7 +143,14 @@ class AudioDetectionPipeline:
             
             # Load audio from bytes using soundfile
             audio_buffer = io.BytesIO(audio_bytes)
-            waveform_np, sr = sf.read(audio_buffer)
+            try:
+                waveform_np, sr = sf.read(audio_buffer)
+            except Exception:
+                from pydub import AudioSegment
+                seg = AudioSegment.from_file(io.BytesIO(audio_bytes))
+                seg = seg.set_channels(1)
+                waveform_np = np.array(seg.get_array_of_samples(), dtype=np.float32) / 32768.0
+                sr = seg.frame_rate
             
             # Convert to (channels, samples)
             if len(waveform_np.shape) == 1:
