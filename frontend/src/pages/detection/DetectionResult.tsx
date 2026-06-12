@@ -5,6 +5,7 @@ import { Shield, Download, ChevronLeft, FileText, User, Clock, Hash, ThumbsUp, T
 import { detectionApi, getErrorMessage } from '@/api/client'
 import { Reveal, VerdictBadge, StatusBadge, Spinner } from '@/components/ui/shared'
 import WaveformVisualizer from '@/components/audio/WaveformVisualizer'
+import ConfidenceTimeline from '@/components/charts/ConfidenceTimeline'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts'
 import toast from 'react-hot-toast'
 
@@ -99,10 +100,10 @@ export default function DetectionResult() {
 
   const isSynthetic = job.is_synthetic
   const accentColor = isSynthetic ? 'var(--red)' : 'var(--green)'
-  const timelineData = (job.confidence_timeline || []).map((p: any) => ({ t: p.t, score: p.score }))
+  const timelineData = (job.confidence_timeline || []).map((p: any) => ({ t: p.timestamp || p.t || 0, score: p.score }))
 
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1100, margin: '0 auto' }}>
+    <div className="w-full space-y-6 pb-12">
       {/* Back + actions */}
       <Reveal>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -153,35 +154,11 @@ export default function DetectionResult() {
         </div>
       </Reveal>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 20 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div className="grid lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-5">
           {/* Confidence timeline */}
           <Reveal delay={0.06}>
-            <div className="card" style={{ padding: 24 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg)', marginBottom: 18 }}>Confidence Timeline</div>
-              {timelineData.length > 1 ? (
-                <ResponsiveContainer width="100%" height={180}>
-                  <AreaChart data={timelineData} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-                    <defs>
-                      <linearGradient id="confGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="var(--blue)" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="var(--blue)" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border-2)" />
-                    <XAxis dataKey="t" tickFormatter={(v: number) => `${v.toFixed(1)}s`} tick={{ fontSize: 10, fill: 'var(--fg-5)' }} axisLine={false} tickLine={false} />
-                    <YAxis domain={[0, 1]} tickFormatter={(v: number) => `${(v*100).toFixed(0)}%`} tick={{ fontSize: 10, fill: 'var(--fg-5)' }} axisLine={false} tickLine={false} />
-                    <Tooltip contentStyle={{ borderRadius: 10, border: '1px solid var(--border)', fontSize: 12 }}
-                      formatter={(v: any) => [`${(v*100).toFixed(1)}%`, 'Risk']}
-                      labelFormatter={(l: any) => `${parseFloat(l).toFixed(2)}s`} />
-                    <ReferenceLine y={0.65} stroke="var(--red)" strokeDasharray="4 2" strokeWidth={1} />
-                    <Area type="monotone" dataKey="score" stroke="var(--blue)" fill="url(#confGrad)" strokeWidth={2} dot={false} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              ) : (
-                <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--fg-5)', fontSize: 13.5 }}>No timeline data</div>
-              )}
-            </div>
+            <ConfidenceTimeline timeline={timelineData} threshold={job.confidence_threshold || 0.65} height={200} />
           </Reveal>
 
           {/* Model scores */}
@@ -189,11 +166,7 @@ export default function DetectionResult() {
             <div className="card" style={{ padding: 24 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg)', marginBottom: 18 }}>Per-Model Scores</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <ModelScoreRow name="AASIST"   score={job.model_scores?.aasist} />
-                <ModelScoreRow name="RawNet2"  score={job.model_scores?.rawnet2} />
-                <ModelScoreRow name="Prosodic" score={job.model_scores?.prosodic} />
-                <ModelScoreRow name="Spectral" score={job.model_scores?.spectral} />
-                <ModelScoreRow name="Glottal"  score={job.model_scores?.glottal} />
+                <ModelScoreRow name="Wav2Vec2" score={job.ensemble_confidence} />
               </div>
             </div>
           </Reveal>
@@ -250,20 +223,10 @@ export default function DetectionResult() {
             </Reveal>
           )}
 
-          {/* Analyst notes */}
-          <Reveal delay={0.14}>
-            <div className="card" style={{ padding: 24 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg)', marginBottom: 12 }}>Analyst Notes</div>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} className="input textarea" rows={4} placeholder="Add your analysis notes, observations, or case context here…" style={{ marginBottom: 10 }} />
-              <button onClick={saveNotes} disabled={savingNotes} className="btn btn-secondary btn-sm">
-                {savingNotes ? <Spinner size={12} /> : 'Save Notes'}
-              </button>
-            </div>
-          </Reveal>
         </div>
 
         {/* Right: Metadata */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="space-y-5">
           <Reveal delay={0.06}>
             <div className="card" style={{ padding: 20 }}>
               <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--fg)', marginBottom: 14 }}>Job Details</div>
@@ -347,6 +310,17 @@ export default function DetectionResult() {
                   <span style={{ color: 'var(--fg-2)', fontFamily: 'monospace', fontSize: 11.5 }}>v{ver}</span>
                 </div>
               ))}
+            </div>
+          </Reveal>
+
+          {/* Analyst notes */}
+          <Reveal delay={0.14}>
+            <div className="card" style={{ padding: 24 }}>
+              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg)', marginBottom: 12 }}>Analyst Notes</div>
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} className="input textarea" rows={4} placeholder="Add your analysis notes, observations, or case context here…" style={{ marginBottom: 10 }} />
+              <button onClick={saveNotes} disabled={savingNotes} className="btn btn-secondary btn-sm">
+                {savingNotes ? <Spinner size={12} /> : 'Save Notes'}
+              </button>
             </div>
           </Reveal>
         </div>

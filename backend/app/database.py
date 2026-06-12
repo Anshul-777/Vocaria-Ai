@@ -37,8 +37,11 @@ class Base(DeclarativeBase):
         }
 
 
+import sys
+is_celery = any("celery" in arg.lower() for arg in sys.argv)
+
 # Create async engine
-if settings.DATABASE_URL.startswith("sqlite"):
+if settings.DATABASE_URL.startswith("sqlite") or is_celery:
     engine = create_async_engine(
         settings.DATABASE_URL,
         echo=settings.DATABASE_ECHO,

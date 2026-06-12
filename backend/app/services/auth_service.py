@@ -88,7 +88,6 @@ async def get_current_user(
 
     # Try JWT first (via Supabase)
     if token:
-        print(f"\n[AUTH DEBUG] Received token! Length: {len(token)}, Starts with: {token[:10]}...")
         # We verify the token by fetching the user profile from Supabase API
         headers = {
             "apikey": settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_KEY,
