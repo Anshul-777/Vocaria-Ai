@@ -20,6 +20,16 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Global httpx client to prevent WinError 10055 socket exhaustion
+# We must reuse the same client for all Supabase API calls.
+_supabase_client = httpx.AsyncClient(
+    limits=httpx.Limits(max_keepalive_connections=50, max_connections=100),
+    timeout=10.0
+)
+
+def get_supabase_client():
+    return _supabase_client
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
@@ -80,26 +90,23 @@ async def get_current_user(
     if token:
         print(f"\n[AUTH DEBUG] Received token! Length: {len(token)}, Starts with: {token[:10]}...")
         # We verify the token by fetching the user profile from Supabase API
-        async with httpx.AsyncClient() as client:
-            headers = {
-                "apikey": settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_KEY,
-                "Authorization": f"Bearer {token}"
-            }
-            try:
-                resp = await client.get(f"{settings.SUPABASE_URL}/auth/v1/user", headers=headers, timeout=10.0)
-                print(f"[AUTH DEBUG] Supabase /auth/v1/user responded with status: {resp.status_code}")
-                print(f"[AUTH DEBUG] Supabase Response Text: {resp.text}\n")
-                if resp.status_code == 200:
-                    user_data = resp.json()
-                    user_id = user_data.get("id")
-                    email = user_data.get("email")
-                    full_name = user_data.get("user_metadata", {}).get("full_name", "")
-                else:
-                    logger.error(f"Supabase auth failed: {resp.status_code} {resp.text}")
-                    credentials_exception.detail = f"Supabase auth failed: {resp.status_code} {resp.text}"
-            except Exception as e:
-                logger.error(f"Failed to verify Supabase token: {e}")
-                credentials_exception.detail = f"Failed to verify Supabase token: {str(e)}"
+        headers = {
+            "apikey": settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_KEY,
+            "Authorization": f"Bearer {token}"
+        }
+        try:
+            resp = await _supabase_client.get(f"{settings.SUPABASE_URL}/auth/v1/user", headers=headers)
+            if resp.status_code == 200:
+                user_data = resp.json()
+                user_id = user_data.get("id")
+                email = user_data.get("email")
+                full_name = user_data.get("user_metadata", {}).get("full_name", "")
+            else:
+                logger.error(f"Supabase auth failed: {resp.status_code} {resp.text}")
+                credentials_exception.detail = f"Supabase auth failed: {resp.status_code} {resp.text}"
+        except Exception as e:
+            logger.error(f"Failed to verify Supabase token: {e}")
+            credentials_exception.detail = f"Failed to verify Supabase token: {str(e)}"
     else:
         print("\n[AUTH DEBUG] No token provided in Authorization header!\n")
 

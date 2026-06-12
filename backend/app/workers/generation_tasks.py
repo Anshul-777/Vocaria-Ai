@@ -32,16 +32,29 @@ async def _run_gen_async(task, job_id, user_id):
         voice_id = job.voice_profile_id
         language = job.language or "en"
         emotion = job.emotion or "neutral"
+        speaking_style = job.speaking_style
         speed = job.speed or 1.0
         temperature = job.temperature or 0.7
         output_format = job.output_format or "wav"
 
     try:
-        tts = get_tts_pipeline()
+        from app.ml.tts_pipeline import get_pipeline
+        # Get model from extra_metadata or default to kokoro
+        model_name = "kokoro-82m"
+        extra = {}
+        
+        async with SessionLocal() as db:
+            result_job = await db.execute(select(GenerationJob).where(GenerationJob.id == job_id))
+            job_meta = result_job.scalar_one_or_none()
+            if job_meta and job_meta.extra_metadata:
+                meta = job_meta.extra_metadata
+                model_name = meta.get("model", "kokoro-82m")
+                extra.update(meta)
+
+        tts = get_pipeline(model_name)
         storage = await get_storage()
 
-        # Extract Kokoro-specific parameters from extra_metadata
-        extra = {}
+        # Extract extra parameters from voice profile if needed
         if voice_id:
             async with SessionLocal() as db:
                 vp_result = await db.execute(select(VoiceProfile).where(VoiceProfile.id == voice_id))
@@ -50,27 +63,44 @@ async def _run_gen_async(task, job_id, user_id):
                     extra["gender"] = vp.gender or "female"
                     extra["accent"] = vp.accent or "american"
                     extra["age"] = vp.age_style or "young adult"
+                    # For ParlerTTS, use profile description as a prompt fallback
+                    if not extra.get("prompt"):
+                        extra["prompt"] = vp.description or "A clear and articulate speech with moderate pacing."
 
-        # Override with job-level extra_metadata if present
-        async with SessionLocal() as db:
-            result_job = await db.execute(select(GenerationJob).where(GenerationJob.id == job_id))
-            job_meta = result_job.scalar_one_or_none()
-            if job_meta and job_meta.extra_metadata:
-                meta = job_meta.extra_metadata
-                extra["gender"] = meta.get("gender", extra.get("gender", "female"))
-                extra["accent"] = meta.get("accent", extra.get("accent", "american"))
-                extra["age"] = meta.get("age", extra.get("age", "young adult"))
-                if meta.get("voice_preset"):
-                    extra["voice_id"] = meta["voice_preset"]
+        # Handle paralinguistic tags
+        import re
+        final_text = text
+        final_prompt = speaking_style or extra.get("prompt", "A clear and articulate speech with moderate pacing.")
+        
+        tags = re.findall(r'\[(.*?)\]', final_text)
+        final_text = re.sub(r'\[.*?\]', '', final_text).strip()
+        
+        if model_name == "parler-tts" and tags:
+            tag_actions = []
+            for t in tags:
+                t = t.lower().strip()
+                if t.endswith('h') or t.endswith('s'):
+                    tag_actions.append(f"{t}es")
+                elif t == 'cry':
+                    tag_actions.append("cries")
+                else:
+                    tag_actions.append(f"{t}s")
+            if tag_actions:
+                final_prompt += f" The speaker {', '.join(tag_actions)}."
 
-        audio_bytes, sr = await tts.synthesize(
-            text=text, language=language,
-            emotion=emotion, speed=speed, temperature=temperature, output_format=output_format,
-            gender=extra.get("gender", "female"),
-            accent=extra.get("accent", "american"),
-            age=extra.get("age", "young adult"),
-            voice_id=extra.get("voice_id"),
-        )
+        # Support prompt-based generation for ParlerTTS
+        kwargs = {
+            "text": final_text, "language": language,
+            "emotion": emotion, "speed": speed, "temperature": temperature, "output_format": output_format,
+            "gender": extra.get("gender", "female"),
+            "accent": extra.get("accent", "american"),
+            "age": extra.get("age", "young adult"),
+            "voice_id": extra.get("voice_preset"),
+            "voice_prompt": final_prompt
+        }
+
+        
+        audio_bytes, sr = await tts.synthesize(**kwargs)
 
         # Get duration
         import soundfile as sf, io as _io

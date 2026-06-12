@@ -45,8 +45,13 @@ class VoiceProfileUpdate(BaseModel):
     use_case_tags: Optional[List[str]] = None
     custom_tags: Optional[List[str]] = None
     visibility: Optional[str] = None
+    avatar_url: Optional[str] = None
+    is_pinned: Optional[bool] = None
+    pinned_at: Optional[datetime] = None
 
-
+class VoiceModelUpdate(BaseModel):
+    is_public: Optional[bool] = None
+    is_active: Optional[bool] = None
 def voice_to_dict(v: VoiceProfile, current_user_id: str = None) -> dict:
     active_model = next((m for m in getattr(v, "models", []) if m.is_active), None)
     if not active_model and getattr(v, "models", []):
@@ -70,6 +75,8 @@ def voice_to_dict(v: VoiceProfile, current_user_id: str = None) -> dict:
         "is_archived": v.is_archived, "is_hub_featured": v.is_hub_featured,
         "license_type": v.license_type, "consent_verified": v.consent_verified,
         "is_synthetic": active_model.is_synthetic if active_model else False,
+        "is_pinned": getattr(v, "is_pinned", False),
+        "pinned_at": getattr(v, "pinned_at", None),
         "created_at": v.created_at, "updated_at": v.updated_at,
     }
 
@@ -123,7 +130,14 @@ async def list_my_voices(
         q = q.where(VoiceProfile.visibility == visibility)
 
     total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar()
-    result = await db.execute(q.order_by(desc(VoiceProfile.created_at)).offset((page-1)*page_size).limit(page_size))
+    
+    q = q.options(selectinload(VoiceProfile.models))
+    q = q.order_by(
+        desc(VoiceProfile.is_pinned),
+        desc(VoiceProfile.pinned_at),
+        desc(VoiceProfile.created_at)
+    )
+    result = await db.execute(q.offset((page-1)*page_size).limit(page_size))
     voices = result.scalars().all()
     return {"total": total, "page": page, "page_size": page_size, "voices": [voice_to_dict(v) for v in voices]}
 
@@ -273,18 +287,77 @@ async def list_voice_models(voice_id: str, current_user: User = Depends(get_curr
     )
     models = models_res.scalars().all()
     
-    return {
-        "models": [
-            {
-                "id": m.id,
-                "source_type": m.source_type,
-                "model_version": m.model_version,
-                "training_status": m.training_status,
-                "preview_url": m.preview_url,
-                "quality_score": m.quality_score,
-                "is_active": m.is_active,
-                "created_at": m.created_at
-            } for m in models
-        ]
-    }
+    from app.models import CloneJob
+    cj_res = await db.execute(
+        select(CloneJob).where(CloneJob.voice_profile_id == voice_id, CloneJob.status == "completed", CloneJob.preview_url.isnot(None)).order_by(desc(CloneJob.created_at))
+    )
+    clone_jobs = cj_res.scalars().all()
+    
+    combined = []
+    for m in models:
+        combined.append({
+            "id": m.id,
+            "source_type": m.source_type,
+            "model_version": m.model_version,
+            "training_status": m.training_status,
+            "preview_url": m.preview_url,
+            "quality_score": m.quality_score,
+            "is_active": m.is_active,
+            "is_public": getattr(m, "is_public", False),
+            "created_at": m.created_at
+        })
+        
+    for c in clone_jobs:
+        combined.append({
+            "id": c.id,
+            "source_type": "cloned",
+            "model_version": c.model_version,
+            "training_status": "ready",
+            "preview_url": c.preview_url,
+            "quality_score": c.quality_score,
+            "is_active": True,
+            "is_public": getattr(c, "is_public", False),
+            "created_at": c.created_at
+        })
+        
+    combined.sort(key=lambda x: x["created_at"], reverse=True)
+    
+    return {"models": combined}
 
+
+@router.put("/{voice_id}/models/{model_id}")
+async def update_voice_model(
+    voice_id: str, 
+    model_id: str, 
+    data: VoiceModelUpdate, 
+    current_user: User = Depends(get_current_user), 
+    db: AsyncSession = Depends(get_db)
+):
+    # Check if voice profile belongs to user
+    v_res = await db.execute(select(VoiceProfile).where(VoiceProfile.id == voice_id))
+    v = v_res.scalar_one_or_none()
+    if not v:
+        raise HTTPException(404, "Voice profile not found")
+    if v.owner_id != current_user.id:
+        raise HTTPException(403, "Access denied")
+        
+    m_res = await db.execute(
+        select(VoiceModel).where(VoiceModel.id == model_id, VoiceModel.voice_profile_id == voice_id)
+    )
+    m = m_res.scalar_one_or_none()
+    if not m:
+        from app.models import CloneJob
+        m_res = await db.execute(
+            select(CloneJob).where(CloneJob.id == model_id, CloneJob.voice_profile_id == voice_id)
+        )
+        m = m_res.scalar_one_or_none()
+        if not m:
+            raise HTTPException(404, "Voice model not found")
+        
+    if data.is_public is not None:
+        m.is_public = data.is_public
+    if data.is_active is not None:
+        m.is_active = data.is_active
+        
+    await db.commit()
+    return {"status": "success", "is_public": getattr(m, 'is_public', False), "is_active": getattr(m, 'is_active', True)}

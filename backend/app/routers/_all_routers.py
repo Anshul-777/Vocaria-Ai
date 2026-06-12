@@ -28,6 +28,10 @@ class CloneJobCreate(BaseModel):
     voice_profile_id: str
     mode: str = "zero_shot"
     fine_tune_steps: Optional[int] = None
+    test_phrase: Optional[str] = None
+    exaggeration: Optional[float] = None
+    cfg_weight: Optional[float] = None
+    temperature: Optional[float] = None
 
 @cloning_router.post("/start", status_code=201)
 async def start_clone_job(
@@ -52,10 +56,17 @@ async def start_clone_job(
     if body.mode == "fine_tune" and not limits.get("fine_tuning"):
         raise HTTPException(402, "Fine-tuning requires Pro or Enterprise plan")
 
+    extra_meta = {}
+    if body.test_phrase is not None: extra_meta["test_phrase"] = body.test_phrase
+    if body.exaggeration is not None: extra_meta["exaggeration"] = body.exaggeration
+    if body.cfg_weight is not None: extra_meta["cfg_weight"] = body.cfg_weight
+    if body.temperature is not None: extra_meta["temperature"] = body.temperature
+
     job = CloneJob(
         user_id=current_user.id, voice_profile_id=body.voice_profile_id,
         status=JobStatus.QUEUED, mode=body.mode,
         fine_tune_steps=body.fine_tune_steps, queued_at=datetime.now(timezone.utc),
+        extra_metadata=extra_meta
     )
     db.add(job)
     db.add(AuditLog(user_id=current_user.id, action=AuditAction.CLONE_START,
@@ -63,12 +74,11 @@ async def start_clone_job(
     await db.commit()
     await db.refresh(job)
 
-    # Dispatch Celery task
-    from app.workers.cloning_tasks import run_clone_task
-    task = run_clone_task.delay(job_id=job.id, user_id=current_user.id,
-                                 voice_profile_id=body.voice_profile_id, mode=body.mode,
-                                 fine_tune_steps=body.fine_tune_steps)
-    job.celery_task_id = task.id
+    # Dispatch background task without relying on Celery/Redis
+    from app.workers.cloning_tasks import _run_clone_async
+    # fallback local execution
+    background_tasks.add_task(_run_clone_async, None, job.id, current_user.id, body.voice_profile_id, body.mode, body.fine_tune_steps)
+    job.celery_task_id = f"local-{uuid.uuid4()}"
     await db.commit()
 
     return {"job_id": job.id, "status": "queued", "message": "Clone job queued"}
@@ -97,18 +107,26 @@ async def list_clone_jobs(
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    q = select(CloneJob).where(CloneJob.user_id == current_user.id).order_by(desc(CloneJob.created_at))
-    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar()
+    q = select(CloneJob, VoiceProfile.name).outerjoin(
+        VoiceProfile, CloneJob.voice_profile_id == VoiceProfile.id
+    ).where(CloneJob.user_id == current_user.id).order_by(desc(CloneJob.created_at))
+    total_q = select(func.count()).select_from(CloneJob).where(CloneJob.user_id == current_user.id)
+    total = (await db.execute(total_q)).scalar()
     result = await db.execute(q.offset((page-1)*page_size).limit(page_size))
-    jobs = result.scalars().all()
-    return {"total": total, "jobs": [{"id": j.id, "voice_profile_id": j.voice_profile_id, "status": j.status,
-             "progress": j.progress, "mode": j.mode, "quality_score": j.quality_score,
-             "created_at": j.created_at, "completed_at": j.completed_at} for j in jobs]}
+    
+    return {"total": total, "jobs": [{
+        "id": j.id, "voice_profile_id": j.voice_profile_id, "voice_profile_name": p_name or "Unknown Profile",
+        "status": j.status, "progress": j.progress, "mode": j.mode, 
+        "quality_score": j.quality_score, "preview_url": j.preview_url,
+        "is_public": getattr(j, "is_public", False),
+        "created_at": j.created_at, "completed_at": j.completed_at
+    } for j, p_name in result.all()]}
 
 
 @cloning_router.post("/upload-sample/{voice_profile_id}")
 async def upload_voice_sample(
     voice_profile_id: str,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -153,10 +171,10 @@ async def upload_voice_sample(
     db.add(sample)
 
     # Run quality analysis in background
-    from app.workers.quality_tasks import analyze_sample_quality
+    from app.workers.quality_tasks import _analyze
     await db.commit()
     await db.refresh(sample)
-    analyze_sample_quality.delay(sample_id=sample.id, storage_key=storage_key)
+    background_tasks.add_task(_analyze, sample.id, storage_key)
 
     return {
         "sample_id": sample.id, "duration_seconds": duration,
@@ -277,28 +295,34 @@ hub_router = APIRouter()
 
 @hub_router.get("/voices")
 async def hub_list_voices(
-    page: int = Query(1, ge=1), page_size: int = Query(24, ge=1, le=100),
+    page: int = Query(1, ge=1), page_size: int = Query(50, ge=1, le=100),
     search: Optional[str] = None, language: Optional[str] = None,
     gender: Optional[str] = None, style: Optional[str] = None,
-    sort: str = Query("popular", pattern="^(popular|newest|likes|plays)$"),
+    sort: str = Query("newest", pattern="^(popular|newest|likes|plays)$"),
     db: AsyncSession = Depends(get_db),
 ):
     """Browse public voice library."""
-    from sqlalchemy import case
     q = select(VoiceProfile, User.username, User.display_name, User.avatar_url).join(
         User, VoiceProfile.owner_id == User.id
-    ).join(
-        VoiceModel, VoiceProfile.id == VoiceModel.voice_profile_id
     ).where(
-        VoiceProfile.visibility == "public", 
-        VoiceProfile.is_active == True, 
+        VoiceProfile.visibility == "public",
+        VoiceProfile.is_active == True,
         VoiceProfile.is_archived == False,
-        VoiceModel.is_active == True,
-        VoiceModel.training_status != 'empty'
     )
 
     if search:
-        q = q.where(VoiceProfile.name.ilike(f"%{search}%"))
+        from sqlalchemy import cast, String
+        s = f"%{search}%"
+        q = q.where(
+            VoiceProfile.name.ilike(s) |
+            VoiceProfile.gender.ilike(s) |
+            VoiceProfile.age_style.ilike(s) |
+            VoiceProfile.language.ilike(s) |
+            cast(VoiceProfile.id, String).ilike(s) |
+            cast(VoiceProfile.emotion_tags, String).ilike(s) |
+            cast(VoiceProfile.use_case_tags, String).ilike(s) |
+            cast(VoiceProfile.custom_tags, String).ilike(s)
+        )
     if language:
         q = q.where(VoiceProfile.language == language)
     if gender:
@@ -309,20 +333,41 @@ async def hub_list_voices(
         "newest": desc(VoiceProfile.created_at),
         "likes": desc(VoiceProfile.likes_count),
         "plays": desc(VoiceProfile.plays_count),
-    }.get(sort, desc(VoiceProfile.plays_count))
+    }.get(sort, desc(VoiceProfile.created_at))
 
     total_q = select(func.count()).select_from(q.subquery())
     total = (await db.execute(total_q)).scalar()
     result = await db.execute(q.order_by(sort_col).offset((page-1)*page_size).limit(page_size))
     rows = result.all()
 
+    # Get preview URLs from VoiceModel or CloneJob for each profile
+    voice_ids = [r[0].id for r in rows]
+    preview_map = {}
+    if voice_ids:
+        # Check VoiceModels
+        vm_result = await db.execute(
+            select(VoiceModel.voice_profile_id, VoiceModel.preview_url)
+            .where(VoiceModel.voice_profile_id.in_(voice_ids), VoiceModel.preview_url.isnot(None), VoiceModel.is_public == True)
+        )
+        for vm_row in vm_result.all():
+            preview_map[vm_row[0]] = vm_row[1]
+            
+        # Check CloneJobs
+        cj_result = await db.execute(
+            select(CloneJob.voice_profile_id, CloneJob.preview_url)
+            .where(CloneJob.voice_profile_id.in_(voice_ids), CloneJob.preview_url.isnot(None), CloneJob.is_public == True)
+        )
+        for cj_row in cj_result.all():
+            if cj_row[0] not in preview_map:
+                preview_map[cj_row[0]] = cj_row[1]
+
     return {
         "total": total, "page": page, "page_size": page_size,
         "voices": [{
             **{k: getattr(r[0], k) for k in ["id","name","description","language","gender","age_style",
                "accent","speaking_style","emotion_tags","use_case_tags","custom_tags",
-               "avatar_url","base_model","fine_tuned","quality_score",
-               "likes_count","plays_count","clones_count","is_hub_featured","license_type","created_at"]},
+               "avatar_url","likes_count","plays_count","clones_count","is_hub_featured","license_type","created_at"]},
+            "preview_url": preview_map.get(r[0].id),
             "owner": {"username": r[1], "display_name": r[2], "avatar_url": r[3]},
         } for r in rows]
     }
@@ -344,7 +389,7 @@ async def hub_get_voice(voice_id: str, db: AsyncSession = Depends(get_db)):
     await db.commit()
     return {**{k: getattr(v, k) for k in ["id","name","description","language","gender","age_style",
         "accent","speaking_style","emotion_tags","use_case_tags","custom_tags",
-        "avatar_url","base_model","fine_tuned","quality_score","similarity_score",
+        "avatar_url",
         "likes_count","plays_count","clones_count","downloads_count","is_hub_featured",
         "license_type","consent_verified","created_at"]},
         "owner": {"username": row[1], "display_name": row[2], "avatar_url": row[3]}}
@@ -363,7 +408,6 @@ async def hub_featured(db: AsyncSession = Depends(get_db)):
         "id": r[0].id, "name": r[0].name, "language": r[0].language,
         "gender": r[0].gender, "avatar_url": r[0].avatar_url,
         "likes_count": r[0].likes_count, "plays_count": r[0].plays_count,
-        "quality_score": r[0].quality_score,
         "owner": {"username": r[1], "display_name": r[2], "avatar_url": r[3]},
     } for r in rows]}
 
@@ -374,6 +418,81 @@ async def hub_stats(db: AsyncSession = Depends(get_db)):
     user_count = (await db.execute(select(func.count(User.id)).where(User.is_active==True))).scalar()
     total_plays = (await db.execute(select(func.sum(VoiceProfile.plays_count)).where(VoiceProfile.visibility=="public"))).scalar()
     return {"public_voices": voice_count, "active_users": user_count, "total_plays": total_plays or 0}
+
+@hub_router.post("/voices/{voice_id}/play")
+async def hub_play_voice(voice_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(VoiceProfile).where(VoiceProfile.id == voice_id))
+    voice = result.scalar_one_or_none()
+    if not voice:
+        raise HTTPException(404, "Voice not found")
+    voice.plays_count += 1
+    await db.commit()
+    return {"status": "success", "plays_count": voice.plays_count}
+
+
+@hub_router.post("/voices/{voice_id}/like")
+async def hub_like_voice(voice_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.models import VoiceLike
+    result = await db.execute(select(VoiceProfile).where(VoiceProfile.id == voice_id))
+    voice = result.scalar_one_or_none()
+    if not voice:
+        raise HTTPException(404, "Voice not found")
+    
+    # Check if already liked
+    like_result = await db.execute(select(VoiceLike).where(VoiceLike.user_id == current_user.id, VoiceLike.voice_profile_id == voice_id))
+    existing_like = like_result.scalar_one_or_none()
+    
+    if existing_like:
+        await db.delete(existing_like)
+        voice.likes_count = max(0, voice.likes_count - 1)
+        liked = False
+    else:
+        new_like = VoiceLike(user_id=current_user.id, voice_profile_id=voice_id)
+        db.add(new_like)
+        voice.likes_count += 1
+        liked = True
+        
+    await db.commit()
+    return {"status": "success", "liked": liked, "likes_count": voice.likes_count}
+
+
+@hub_router.post("/voices/{voice_id}/save")
+async def hub_save_voice(voice_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.models import SavedVoice
+    result = await db.execute(select(VoiceProfile).where(VoiceProfile.id == voice_id))
+    voice = result.scalar_one_or_none()
+    if not voice:
+        raise HTTPException(404, "Voice not found")
+    
+    save_result = await db.execute(select(SavedVoice).where(SavedVoice.user_id == current_user.id, SavedVoice.voice_profile_id == voice_id))
+    existing_save = save_result.scalar_one_or_none()
+    
+    if existing_save:
+        await db.delete(existing_save)
+        saved = False
+    else:
+        new_save = SavedVoice(user_id=current_user.id, voice_profile_id=voice_id)
+        db.add(new_save)
+        saved = True
+        
+    await db.commit()
+    return {"status": "success", "saved": saved}
+
+
+@hub_router.get("/saved")
+async def hub_get_saved(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.models import SavedVoice
+    result = await db.execute(select(SavedVoice.voice_profile_id).where(SavedVoice.user_id == current_user.id))
+    saved_ids = result.scalars().all()
+    return {"saved_voices": saved_ids}
+
+
+@hub_router.get("/likes")
+async def hub_get_likes(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.models import VoiceLike
+    result = await db.execute(select(VoiceLike.voice_profile_id).where(VoiceLike.user_id == current_user.id))
+    liked_ids = result.scalars().all()
+    return {"liked_voices": liked_ids}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1028,7 +1147,7 @@ from fastapi.responses import FileResponse
 import os
 from app.config import settings
 
-@uploads_router.get("/serve/{bucket}/{key:path}")
+@uploads_router.api_route("/serve/{bucket}/{key:path}", methods=["GET", "HEAD"])
 async def serve_file(bucket: str, key: str):
     import os
     from app.config import settings

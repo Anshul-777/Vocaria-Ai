@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pydantic import BaseModel
@@ -61,26 +61,27 @@ async def enhance_prompt(
         return {"enhanced_prompt": response.text.strip()}
     except Exception as e:
         print(f"Gemini API error in enhance_prompt: {e}")
-        try:
-            print("Falling back to Groq API...")
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
-                    json={
-                        "model": "llama-3.1-8b-instant",
-                        "messages": [
-                            {"role": "system", "content": system_instruction},
-                            {"role": "user", "content": contents}
-                        ],
-                        "temperature": 0.8
-                    },
-                    timeout=10.0
-                )
-                if resp.status_code == 200:
-                    return {"enhanced_prompt": resp.json()["choices"][0]["message"]["content"].strip()}
-        except Exception as groq_e:
-            print(f"Groq API error in enhance_prompt: {groq_e}")
+        if getattr(settings, "GROQ_API_KEY", None):
+            try:
+                print("Falling back to Groq API...")
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+                        json={
+                            "model": "llama-3.1-8b-instant",
+                            "messages": [
+                                {"role": "system", "content": system_instruction},
+                                {"role": "user", "content": contents}
+                            ],
+                            "temperature": 0.8
+                        },
+                        timeout=10.0
+                    )
+                    if resp.status_code == 200:
+                        return {"enhanced_prompt": resp.json()["choices"][0]["message"]["content"].strip()}
+            except Exception as groq_e:
+                print(f"Groq API error in enhance_prompt: {groq_e}")
             
         return {"enhanced_prompt": prompt_text}
 
@@ -113,32 +114,34 @@ Return ONLY the final spoken text without any quotes, explanations, or markdown 
         return {"enhanced_phrase": response.text.strip()}
     except Exception as e:
         print(f"Gemini API error in enhance_phrase: {e}")
-        try:
-            print("Falling back to Groq API for phrase...")
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
-                    json={
-                        "model": "llama-3.1-8b-instant",
-                        "messages": [
-                            {"role": "system", "content": system_instruction},
-                            {"role": "user", "content": phrase_text if phrase_text else "Create a random 20-second test monologue."}
-                        ],
-                        "temperature": 0.8
-                    },
-                    timeout=10.0
-                )
-                if resp.status_code == 200:
-                    return {"enhanced_phrase": resp.json()["choices"][0]["message"]["content"].strip()}
-        except Exception as groq_e:
-            print(f"Groq API error in enhance_phrase: {groq_e}")
+        if getattr(settings, "GROQ_API_KEY", None):
+            try:
+                print("Falling back to Groq API for phrase...")
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+                        json={
+                            "model": "llama-3.1-8b-instant",
+                            "messages": [
+                                {"role": "system", "content": system_instruction},
+                                {"role": "user", "content": phrase_text if phrase_text else "Create a random 20-second test monologue."}
+                            ],
+                            "temperature": 0.8
+                        },
+                        timeout=10.0
+                    )
+                    if resp.status_code == 200:
+                        return {"enhanced_phrase": resp.json()["choices"][0]["message"]["content"].strip()}
+            except Exception as groq_e:
+                print(f"Groq API error in enhance_phrase: {groq_e}")
             
         return {"enhanced_phrase": phrase_text}
 
 @router.post('/chat')
 async def chat_with_agent(
     body: AgentChatRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -229,9 +232,10 @@ async def chat_with_agent(
     await db.commit()
     await db.refresh(job)
 
-    from app.workers.generation_tasks import run_generation_task
-    task = run_generation_task.delay(job_id=job.id, user_id=current_user.id)
-    job.celery_task_id = task.id
+    from app.workers.generation_tasks import _run_generation_async
+    background_tasks.add_task(_run_generation_async, None, job.id, current_user.id)
+    import uuid
+    job.celery_task_id = f"local-{uuid.uuid4()}"
     await db.commit()
 
     return {

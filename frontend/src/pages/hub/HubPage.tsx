@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Globe, Search, Heart, Play, Mic2, ChevronRight, Filter, Star, TrendingUp, Clock, Download } from 'lucide-react'
-import { hubApi, voicesApi, getErrorMessage } from '@/api/client'
+import { Globe, Search, Heart, Play, Mic2, Download, TrendingUp, Clock, Star, Bookmark } from 'lucide-react'
+import { hubApi } from '@/api/client'
 import { Reveal, StaggerGroup, StaggerItem, CountUp, WaveBars, EmptyState, Spinner } from '@/components/ui/shared'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/authStore'
@@ -14,91 +14,176 @@ const LANG_OPTIONS = [
   { code: 'it', label: '🇮🇹 Italian' }, { code: 'pt', label: '🇵🇹 Portuguese' },
   { code: 'zh', label: '🇨🇳 Chinese' }, { code: 'ja', label: '🇯🇵 Japanese' },
   { code: 'ko', label: '🇰🇷 Korean' }, { code: 'hi', label: '🇮🇳 Hindi' },
-  { code: 'ru', label: '🇷🇺 Russian' }, { code: 'ar', label: '🇸🇦 Arabic' },
 ]
 const SORT_OPTIONS = [
-  { value: 'popular', label: 'Most Popular', icon: TrendingUp },
   { value: 'newest', label: 'Newest', icon: Clock },
+  { value: 'popular', label: 'Most Popular', icon: TrendingUp },
   { value: 'likes', label: 'Most Liked', icon: Heart },
 ]
 const PALETTE = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2', '#db2777', '#65a30d']
 
-function VoiceHubCard({ voice, onClone, onPlay }: { voice: any; onClone: () => void; onPlay: () => void }) {
+function VoiceHubRow({ voice, onClone, isLiked, isSaved, onLike, onSave, onPlay }: { voice: any; onClone: () => void; isLiked: boolean; isSaved: boolean; onLike: () => void; onSave: () => void; onPlay: () => void }) {
   const [playing, setPlaying] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const hue = PALETTE[voice.id?.charCodeAt(0) % PALETTE.length] ?? '#2563eb'
   const initials = voice.name?.slice(0, 2).toUpperCase() ?? 'VC'
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!voice.preview_url) {
+      toast.error("No audio preview available")
+      return
+    }
+
+    if (playing) {
+      audioRef.current?.pause()
+      setPlaying(false)
+    } else {
+      if (!audioRef.current) {
+        audioRef.current = new Audio(voice.preview_url)
+        audioRef.current.onended = () => setPlaying(false)
+      }
+      audioRef.current.play().catch(err => {
+        toast.error("Failed to play audio")
+        setPlaying(false)
+      })
+      setPlaying(true)
+      onPlay()
+    }
+  }
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause()
+        audioRef.current = null
+      }
+    }
+  }, [])
+
+  const copyId = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    navigator.clipboard.writeText(voice.id)
+    toast.success('Voice ID copied')
+  }
+
+  const shareLink = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const url = `${window.location.origin}/hub?voice=${voice.id}`
+    navigator.clipboard.writeText(url)
+    toast.success('Link copied to clipboard')
+  }
+
+  const downloadWav = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (voice.preview_url) {
+      try {
+        const response = await fetch(voice.preview_url)
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.style.display = 'none'
+        a.href = url
+        a.download = `${voice.name.replace(/\s+/g, '_')}_preview.wav`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+      } catch (err) {
+        toast.error('Failed to download audio')
+      }
+    }
+  }
 
   return (
     <motion.div
       layout
-      initial={{ opacity: 0, y: 12 }}
+      initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       className="card-hover"
-      style={{ padding: 20 }}
-      onClick={() => { }}
+      style={{ padding: '16px 20px', display: 'flex', gap: 16, alignItems: 'flex-start', borderRadius: 12 }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 14 }}>
+      {/* Left Avatar/Play Area */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, width: 44, flexShrink: 0 }}>
         {voice.avatar_url ? (
-          <img src={voice.avatar_url} alt="" style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'cover', flexShrink: 0 }} />
+          <img src={voice.avatar_url} alt="" style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
         ) : (
-          <div style={{ width: 48, height: 48, borderRadius: 12, background: hue, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 17, flexShrink: 0, opacity: 0.9 }}>
-            {initials}
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--bg-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-2)', overflow: 'hidden' }}>
+            <img src="/favicon.svg" alt="Vocaria Logo" style={{ width: 28, height: 28, objectFit: 'contain' }} />
           </div>
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--fg)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{voice.name}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fg-4)' }}>
-            <span>{voice.language?.toUpperCase()}</span>
-            {voice.gender && <><span>·</span><span style={{ textTransform: 'capitalize' }}>{voice.gender}</span></>}
-            {voice.speaking_style && <><span>·</span><span style={{ textTransform: 'capitalize' }}>{voice.speaking_style}</span></>}
+        <button
+          onClick={togglePlay}
+          style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--bg-2)', border: '1px solid var(--border-2)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}
+          className="hover-pop"
+        >
+          {playing ? <span style={{ color: hue, fontSize: 12 }}>■</span> : <Play size={14} color={hue} style={{ marginLeft: 2 }} />}
+        </button>
+      </div>
+
+      {/* Middle Details Area */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <div style={{ fontSize: 17, fontWeight: 600, fontFamily: 'system-ui, -apple-system, sans-serif', color: 'var(--fg)', letterSpacing: '-0.01em' }}>{voice.name}</div>
+
+          {/* Plays and Likes moved beside name */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginLeft: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--fg-4)', fontWeight: 500 }}>
+              <Play size={12} /><span>{(voice.plays_count || 0).toLocaleString()}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--pink)', fontWeight: 500 }}>
+              <Heart size={12} fill="var(--pink)" /><span>{(voice.likes_count || 0).toLocaleString()}</span>
+            </div>
           </div>
-          {voice.owner && (
-            <div style={{ fontSize: 11.5, color: 'var(--fg-5)', marginTop: 3 }}>by {voice.owner.display_name}</div>
+
+          {voice.is_hub_featured && (
+            <span className="badge badge-amber" style={{ fontSize: 10, padding: '2px 6px', marginLeft: 4 }}>⭐ Featured</span>
           )}
-        </div>
-        {voice.is_hub_featured && (
-          <span className="badge badge-amber" style={{ fontSize: 10, flexShrink: 0 }}>⭐ Featured</span>
-        )}
-      </div>
 
-      {/* Wave preview */}
-      <div style={{ marginBottom: 14, padding: '10px 12px', background: 'var(--bg-2)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button
-          onClick={(e) => { e.stopPropagation(); setPlaying(!playing); onPlay() }}
-          style={{ width: 28, height: 28, borderRadius: '50%', background: hue, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          {playing ? <span style={{ color: '#fff', fontSize: 10 }}>■</span> : <Play size={11} color="#fff" style={{ marginLeft: 1 }} />}
-        </button>
-        <WaveBars color={hue} bars={16} height={24} active={playing} />
-      </div>
+          <div style={{ flex: 1 }} />
 
-      {/* Tags */}
-      {(voice.emotion_tags?.length > 0 || voice.use_case_tags?.length > 0) && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 14 }}>
-          {[...(voice.emotion_tags || []), ...(voice.use_case_tags || [])].slice(0, 3).map((t: string) => (
-            <span key={t} style={{ fontSize: 11, padding: '2px 8px', borderRadius: 99, background: 'var(--bg-3)', color: 'var(--fg-4)', fontWeight: 500 }}>{t}</span>
-          ))}
+          {/* Action Row - Inline with Name */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={(e) => { e.stopPropagation(); onLike(); }} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, background: 'var(--bg-2)', color: isLiked ? 'var(--pink)' : 'var(--fg-3)', border: '1px solid var(--border-2)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }} className="hover-opacity">
+              <Heart size={13} fill={isLiked ? 'var(--pink)' : 'none'} />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); onSave(); }} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, background: 'var(--bg-2)', color: isSaved ? 'var(--blue)' : 'var(--fg-3)', border: '1px solid var(--border-2)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }} className="hover-opacity">
+              <Bookmark size={13} fill={isSaved ? 'var(--blue)' : 'none'} /> {isSaved ? 'Saved' : 'Save'}
+            </button>
+            <button onClick={copyId} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, background: 'var(--bg-2)', color: 'var(--fg-3)', border: '1px solid var(--border-2)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }} className="hover-opacity">
+              Copy ID
+            </button>
+            <button onClick={shareLink} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, background: 'var(--bg-2)', color: 'var(--fg-3)', border: '1px solid var(--border-2)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }} className="hover-opacity">
+              Share
+            </button>
+            {voice.preview_url && (
+              <button onClick={downloadWav} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 10px', borderRadius: 6, background: 'var(--bg-2)', color: 'var(--fg-3)', border: '1px solid var(--border-2)', cursor: 'pointer', fontSize: 12, fontWeight: 600 }} className="hover-opacity">
+                <Download size={13} />
+              </button>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onClone() }}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 14px', borderRadius: 6, background: 'var(--blue)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, transition: 'all 0.12s' }}
+              className="hover-opacity">
+              <Mic2 size={13} /> Use
+            </button>
+          </div>
         </div>
-      )}
 
-      {/* Stats row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 12, borderTop: '1px solid var(--border-2)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--fg-4)' }}>
-          <Play size={11} /><span>{(voice.plays_count || 0).toLocaleString()}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--fg-4)', marginBottom: 10, fontWeight: 500 }}>
+          <span>{voice.language?.toUpperCase() || 'EN'}</span>
+          {voice.gender && <><span>·</span><span style={{ textTransform: 'capitalize' }}>{voice.gender}</span></>}
+          {voice.age_style && <><span>·</span><span style={{ textTransform: 'capitalize' }}>{voice.age_style}</span></>}
+          <span>·</span>
+          <span>by <span style={{ color: 'var(--blue)', fontWeight: 600 }}>{voice.owner?.display_name || 'Vocaria AI'}</span></span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--fg-4)' }}>
-          <Heart size={11} /><span>{(voice.likes_count || 0).toLocaleString()}</span>
-        </div>
-        {voice.quality_score != null && (
-          <div style={{ fontSize: 12, color: voice.quality_score >= 0.8 ? 'var(--green)' : 'var(--fg-4)', fontWeight: 600 }}>
-            {(voice.quality_score * 100).toFixed(0)}% quality
+
+        {voice.description && (
+          <div style={{ padding: '8px 14px', background: 'var(--bg-2)', borderRadius: 8, fontSize: 13, color: 'var(--fg-3)', fontStyle: 'italic', borderLeft: `3px solid ${hue}`, lineHeight: 1.5 }}>
+            "{voice.description}"
           </div>
         )}
-        <div style={{ flex: 1 }} />
-        <button
-          onClick={(e) => { e.stopPropagation(); onClone() }}
-          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 8, background: 'var(--blue-soft)', color: 'var(--blue)', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, transition: 'all 0.12s' }}>
-          <Download size={11} /> Use Voice
-        </button>
       </div>
     </motion.div>
   )
@@ -108,7 +193,6 @@ export default function HubPage() {
   const navigate = useNavigate()
   const { user } = useAuthStore()
   const [voices, setVoices] = useState<any[]>([])
-  const [featured, setFeatured] = useState<any[]>([])
   const [stats, setStats] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -116,14 +200,21 @@ export default function HubPage() {
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
   const [lang, setLang] = useState('')
-  const [sort, setSort] = useState('popular')
-  const PAGE_SIZE = 24
+  const [sort, setSort] = useState('newest')
+  const [viewSavedOnly, setViewSavedOnly] = useState(false)
+
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set())
+  const PAGE_SIZE = 50
 
   useEffect(() => {
-    hubApi.featured().then(d => setFeatured(d.voices || [])).catch(() => { })
     hubApi.stats().then(d => setStats(d)).catch(() => { })
+    if (user) {
+      hubApi.getSaved().then(d => setSavedIds(new Set(d.saved_voices))).catch(() => { })
+      hubApi.getLikes().then(d => setLikedIds(new Set(d.liked_voices))).catch(() => { })
+    }
     loadVoices(1, true)
-  }, [])
+  }, [user])
 
   const loadVoices = useCallback(async (p: number, reset = false) => {
     if (reset) setLoading(true); else setLoadingMore(true)
@@ -141,9 +232,46 @@ export default function HubPage() {
 
   const cloneVoice = async (voiceId: string) => {
     if (!user) { navigate('/login'); return }
-    toast.success('Opening clone setup…')
-    navigate(`/clone?hub_voice=${voiceId}`)
+    toast.success('Opening Studio…')
+    navigate(`/studio?hub_voice=${voiceId}`)
   }
+
+  const handlePlay = async (voiceId: string) => {
+    try {
+      const { plays_count } = await hubApi.playVoice(voiceId)
+      setVoices(prev => prev.map(v => v.id === voiceId ? { ...v, plays_count } : v))
+    } catch { }
+  }
+
+  const handleLike = async (voiceId: string) => {
+    if (!user) { toast.error('Login to like voices'); return; }
+    try {
+      const { liked, likes_count } = await hubApi.likeVoice(voiceId)
+      setLikedIds(prev => {
+        const next = new Set(prev)
+        if (liked) next.add(voiceId)
+        else next.delete(voiceId)
+        return next
+      })
+      setVoices(prev => prev.map(v => v.id === voiceId ? { ...v, likes_count } : v))
+    } catch { }
+  }
+
+  const handleSave = async (voiceId: string) => {
+    if (!user) { toast.error('Login to save voices'); return; }
+    try {
+      const { saved } = await hubApi.saveVoice(voiceId)
+      setSavedIds(prev => {
+        const next = new Set(prev)
+        if (saved) next.add(voiceId)
+        else next.delete(voiceId)
+        return next
+      })
+      toast.success(saved ? 'Voice saved' : 'Voice removed from saved')
+    } catch { }
+  }
+
+  const filteredVoices = viewSavedOnly ? voices.filter(v => savedIds.has(v.id)) : voices
 
   return (
     <div className="w-full space-y-10 pb-12">
@@ -153,7 +281,12 @@ export default function HubPage() {
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 12px', borderRadius: 99, background: 'var(--blue-soft)', color: 'var(--blue)', fontSize: 12, fontWeight: 600, marginBottom: 16 }}>
             <Globe size={12} /> Public Voice Library
           </div>
-          <div className="flex items-center justify-center gap-3"><Globe className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-orange-400 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>Vocaria Hub</h1></div>
+          <div className="flex items-center justify-center gap-3">
+            <Globe className="w-6 h-6 text-gray-800" />
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-orange-400 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>
+              Vocaria Hub
+            </h1>
+          </div>
           <p style={{ fontSize: 15, color: 'var(--fg-4)', maxWidth: 520, margin: '0 auto', lineHeight: 1.6 }}>
             Browse voices created and shared by the Vocaria community. Preview, like, and clone any voice for your projects.
           </p>
@@ -176,27 +309,7 @@ export default function HubPage() {
         </div>
       </Reveal>
 
-      {/* Featured */}
-      {featured.length > 0 && (
-        <div style={{ marginBottom: 40 }}>
-          <Reveal>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.07em', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Star size={13} /> Featured Voices
-              </div>
-            </div>
-          </Reveal>
-          <StaggerGroup className="grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16, display: 'grid' }}>
-            {featured.slice(0, 4).map((v: any) => (
-              <StaggerItem key={v.id}>
-                <VoiceHubCard voice={v} onClone={() => cloneVoice(v.id)} onPlay={() => { }} />
-              </StaggerItem>
-            ))}
-          </StaggerGroup>
-        </div>
-      )}
-
-      {/* Filters */}
+      {/* Filters & Search - Now at the top */}
       <Reveal>
         <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
           <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
@@ -206,21 +319,20 @@ export default function HubPage() {
           <select value={lang} onChange={e => setLang(e.target.value)} className="input select" style={{ width: 160 }}>
             {LANG_OPTIONS.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}
           </select>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {SORT_OPTIONS.map(opt => (
-              <button key={opt.value} onClick={() => setSort(opt.value)}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '0 12px', height: 38, borderRadius: 10, border: `1px solid ${sort === opt.value ? 'var(--blue)' : 'var(--border)'}`, background: sort === opt.value ? 'var(--blue-soft)' : 'var(--bg)', color: sort === opt.value ? 'var(--blue)' : 'var(--fg-3)', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s', flexShrink: 0 }}>
-                <opt.icon size={13} />{opt.label}
-              </button>
-            ))}
-          </div>
+          <select value={sort} onChange={e => setSort(e.target.value)} style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg-2)', color: 'var(--fg)', fontSize: 13, outline: 'none', cursor: 'pointer' }}>
+            {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          {user && (
+            <button
+              onClick={() => setViewSavedOnly(!viewSavedOnly)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px', borderRadius: 8, background: viewSavedOnly ? 'var(--blue)' : 'var(--bg-2)', color: viewSavedOnly ? '#fff' : 'var(--fg)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: 13, fontWeight: 500, transition: 'all 0.2s' }}
+            >
+              <Bookmark size={16} fill={viewSavedOnly ? '#fff' : 'none'} />
+              {viewSavedOnly ? 'Showing Saved' : 'View Saved'}
+            </button>
+          )}
         </div>
       </Reveal>
-
-      {/* Grid */}
-      <div style={{ marginBottom: 6, fontSize: 13, color: 'var(--fg-4)' }}>
-        {total.toLocaleString()} voices
-      </div>
 
       {loading ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
@@ -228,17 +340,27 @@ export default function HubPage() {
             <div key={i} className="skeleton" style={{ height: 220, borderRadius: 16 }} />
           ))}
         </div>
-      ) : voices.length === 0 ? (
-        <EmptyState icon={Globe} title="No voices found" description="Try different search terms or language filters." />
+      ) : filteredVoices.length === 0 ? (
+        <EmptyState icon={<Globe size={32} />} title={viewSavedOnly ? "No saved voices" : "No voices found"} description={viewSavedOnly ? "You haven't saved any voices yet." : "Try adjusting your filters or search query"} />
       ) : (
         <>
-          <motion.div layout style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+          <StaggerGroup className="flex flex-col" style={{ gap: 12, display: 'flex', flexDirection: 'column' }}>
             <AnimatePresence>
-              {voices.map((v: any) => (
-                <VoiceHubCard key={v.id} voice={v} onClone={() => cloneVoice(v.id)} onPlay={() => { }} />
+              {filteredVoices.map(v => (
+                <StaggerItem key={v.id}>
+                  <VoiceHubRow
+                    voice={v}
+                    onClone={() => cloneVoice(v.id)}
+                    isLiked={likedIds.has(v.id)}
+                    isSaved={savedIds.has(v.id)}
+                    onLike={() => handleLike(v.id)}
+                    onSave={() => handleSave(v.id)}
+                    onPlay={() => handlePlay(v.id)}
+                  />
+                </StaggerItem>
               ))}
             </AnimatePresence>
-          </motion.div>
+          </StaggerGroup>
           {voices.length < total && (
             <div style={{ textAlign: 'center', marginTop: 32 }}>
               <button onClick={() => loadVoices(page + 1)} disabled={loadingMore} className="btn btn-secondary">

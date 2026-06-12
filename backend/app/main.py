@@ -22,7 +22,7 @@ from app.routers import (
     detection, hub, plans, admin, analytics,
     apikeys, notifications, websocket_router,
     uploads, history, audit_logs, organizations,
-    quality, benchmarks, streaming, agent
+    quality, benchmarks, streaming, agent, studio
 )
 from app.utils.logger import setup_logging
 
@@ -192,6 +192,7 @@ app.include_router(audit_logs.router,    prefix=f"{API_PREFIX}/audit",         t
 app.include_router(quality.router,       prefix=f"{API_PREFIX}/quality",       tags=["Quality Analysis"])
 app.include_router(benchmarks.router,    prefix=f"{API_PREFIX}/benchmarks",    tags=["Benchmarks"])
 app.include_router(admin.router,         prefix=f"{API_PREFIX}/admin",         tags=["Admin"])
+app.include_router(studio.studio_router, prefix=f"{API_PREFIX}/studio",        tags=["Studio"])
 app.include_router(websocket_router.router, prefix="/ws",                       tags=["WebSocket"])
 
 

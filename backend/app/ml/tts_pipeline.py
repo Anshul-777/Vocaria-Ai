@@ -553,10 +553,139 @@ class ChatterboxPipeline:
         }
 
 
+class ParlerTTSPipeline:
+    def __init__(self):
+        self._model = None
+        self._tokenizer = None
+        self._loaded = False
+        self._loading = False
+        self._device = "cuda" if self._check_cuda() else "cpu"
+        self.sample_rate = 44100  # Default for mini-v1
+
+    @staticmethod
+    def _check_cuda() -> bool:
+        try:
+            import torch
+            return torch.cuda.is_available()
+        except Exception:
+            return False
+
+    async def ensure_loaded(self):
+        if self._loaded:
+            return
+        if self._loading:
+            while self._loading:
+                await asyncio.sleep(0.1)
+            return
+
+        self._loading = True
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, self._load_model)
+            self._loaded = True
+            logger.info(f"✅ Parler-TTS loaded on {self._device}")
+        except Exception as e:
+            logger.error(f"❌ Parler-TTS load failed: {e}")
+            raise
+        finally:
+            self._loading = False
+
+    def _load_model(self):
+        try:
+            import torch
+            from parler_tts import ParlerTTSForConditionalGeneration
+            from transformers import AutoTokenizer
+
+            # Use mini-v1 for speed, or let user configure
+            model_id = "parler-tts/parler-tts-mini-v1"
+            self._model = ParlerTTSForConditionalGeneration.from_pretrained(model_id).to(self._device)
+            self._tokenizer = AutoTokenizer.from_pretrained(model_id)
+            self.sample_rate = self._model.config.sampling_rate
+            logger.info(f"Parler-TTS ({model_id}) loaded (device={self._device}, sr={self.sample_rate})")
+        except Exception as e:
+            logger.error(f"Parler-TTS load error: {e}", exc_info=True)
+            raise RuntimeError(f"Failed to load Parler-TTS: {e}")
+
+    async def synthesize(
+        self,
+        text: str,
+        voice_prompt: str = "A female speaker delivers a clear and articulate speech with moderate pacing.",
+        output_format: str = "wav",
+        **kwargs,
+    ) -> Tuple[bytes, int]:
+        """
+        Generate speech using Parler-TTS.
+        Returns (audio_bytes, sample_rate).
+        """
+        await self.ensure_loaded()
+        import torch
+
+        logger.info(f"Parler-TTS generating: prompt='{voice_prompt}', len={len(text)}")
+
+        loop = asyncio.get_event_loop()
+
+        def _generate():
+            with torch.inference_mode():
+                try:
+                    # Parler-TTS prompt mapping:
+                    # prompt -> input_ids
+                    # text -> prompt_input_ids
+                    input_ids = self._tokenizer(voice_prompt, return_tensors="pt").input_ids.to(self._device)
+                    prompt_input_ids = self._tokenizer(text, return_tensors="pt").input_ids.to(self._device)
+
+                    generation = self._model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
+                    audio_np = generation.cpu().numpy().squeeze().astype(np.float32)
+                    return audio_np
+                finally:
+                    if self._device == "cuda":
+                        torch.cuda.empty_cache()
+
+        audio_np = await loop.run_in_executor(None, _generate)
+
+        if audio_np is None or audio_np.size == 0:
+            raise RuntimeError("Parler-TTS generated empty audio")
+
+        # Normalize
+        max_val = np.abs(audio_np).max()
+        if max_val > 0:
+            audio_np = audio_np / max_val * 0.95
+
+        audio_bytes = self._numpy_to_bytes(audio_np, self.sample_rate, output_format)
+        return audio_bytes, self.sample_rate
+
+    def _numpy_to_bytes(self, audio: np.ndarray, sample_rate: int, fmt: str = "wav") -> bytes:
+        import soundfile as sf
+        buf = io.BytesIO()
+        sf_format = fmt.upper()
+        if sf_format == "MP3":
+            try:
+                from pydub import AudioSegment
+                wav_buf = io.BytesIO()
+                sf.write(wav_buf, audio, sample_rate, format="WAV")
+                wav_buf.seek(0)
+                seg = AudioSegment.from_wav(wav_buf)
+                seg.export(buf, format="mp3")
+            except Exception:
+                sf.write(buf, audio, sample_rate, format="WAV")
+        else:
+            sf.write(buf, audio, sample_rate, format=sf_format if sf_format in ["WAV", "FLAC", "OGG"] else "WAV")
+        buf.seek(0)
+        return buf.read()
+
+    def get_supported_parameters(self) -> Dict:
+        return {
+            "prompt": {"supported": True, "note": "Detailed text description of voice/environment"},
+            "voice_cloning": {"supported": False, "note": "Use Chatterbox for zero-shot cloning"},
+            "model": "parler-tts-mini-v1",
+            "license": "Apache 2.0",
+            "sample_rate": self.sample_rate,
+        }
+
 # ─── Singletons ───────────────────────────────────────────────────────────────
 
 _tts_pipeline: Optional[TTSPipeline] = None
 _chatterbox_pipeline: Optional[ChatterboxPipeline] = None
+_parler_pipeline: Optional[ParlerTTSPipeline] = None
 
 
 def get_tts_pipeline() -> TTSPipeline:
@@ -573,8 +702,16 @@ def get_chatterbox_pipeline() -> ChatterboxPipeline:
     return _chatterbox_pipeline
 
 
+def get_parler_pipeline() -> ParlerTTSPipeline:
+    global _parler_pipeline
+    if _parler_pipeline is None:
+        _parler_pipeline = ParlerTTSPipeline()
+    return _parler_pipeline
+
+
 def get_pipeline(model_name: str = "kokoro-82m"):
-    """Factory function to get the appropriate pipeline by model name."""
     if model_name == "chatterbox-turbo":
         return get_chatterbox_pipeline()
+    elif model_name == "parler-tts":
+        return get_parler_pipeline()
     return get_tts_pipeline()
