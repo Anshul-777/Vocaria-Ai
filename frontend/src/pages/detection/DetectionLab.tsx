@@ -630,24 +630,33 @@ export default function DetectionLab() {
 
 function RecentDetections() {
   const [jobs, setJobs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
-    detectionApi.list({ page: 1, page_size: 5 }).then(d => setJobs(d.jobs || [])).catch(() => {})
+    detectionApi.list({ page: 1, page_size: 5 })
+      .then(d => setJobs(d.jobs || []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
   }, [])
 
+  if (loading) return <div className="min-h-[200px] flex items-center justify-center"><Spinner /></div>
   if (!jobs.length) return null
 
   return (
-    <div className="card rounded-2xl p-6">
+    <div className="card rounded-2xl p-6 min-h-[200px]">
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-700 text-surface-900">Recent Detections</h3>
-        <Link to="/history" className="text-xs text-brand-600 font-600">View all</Link>
+        <Link to="/profile?tab=detected" className="text-xs text-brand-600 font-600">View all</Link>
       </div>
       <div className="space-y-2">
         {jobs.map(j => (
           <Link key={j.id} to={`/detection/${j.id}`}
             className="flex items-center gap-4 p-3 rounded-xl hover:bg-surface-50 transition-all group">
             <VerdictBadge verdict={j.verdict} />
-            <span className="text-sm text-surface-600 flex-1 truncate">{j.original_filename || 'Unknown file'}</span>
+            <div className="flex-1 min-w-0">
+               <div className="text-sm font-700 text-surface-800 truncate font-mono">{j.id}</div>
+               <div className="text-xs text-surface-500 truncate">{j.original_filename || 'Unknown file'}</div>
+            </div>
             <span className="text-xs text-surface-400">{j.duration_seconds?.toFixed(1)}s</span>
             <StatusBadge status={j.status} />
           </Link>
@@ -656,3 +665,4 @@ function RecentDetections() {
     </div>
   )
 }
+

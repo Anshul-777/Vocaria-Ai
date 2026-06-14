@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { 
   User, Mic2, Heart, Play, Users, UserPlus, Settings, 
   MapPin, Link as LinkIcon, Calendar, CheckCircle2, 
   Globe2, Lock, Shield, Wand2, Activity, Bookmark, Bot, Pencil, Trash2
 } from 'lucide-react'
-import { usersApi, voicesApi, generationApi, getErrorMessage } from '@/api/client'
+import { usersApi, voicesApi, generationApi, detectionApi, getErrorMessage } from '@/api/client'
 import { Reveal, PlanBadge, Spinner, WaveBars } from '@/components/ui/shared'
 import { useAuthStore } from '@/store/authStore'
 import toast from 'react-hot-toast'
@@ -85,6 +85,7 @@ function ProfilesTab({ user }: { user: any }) {
           onDelete={() => {}} 
           onGenerate={() => navigate('/generate?voice=' + item.id)} 
           onClone={() => navigate('/clone?voice=' + item.id)} 
+          onPin={() => {}}
         />
       ))}
     </div>
@@ -124,6 +125,7 @@ function ClonedTab({ user }: { user: any }) {
           onDelete={() => {}} 
           onGenerate={() => navigate('/generate?voice=' + item.id)} 
           onClone={() => navigate('/clone?voice=' + item.id)} 
+          onPin={() => {}}
         />
       ))}
     </div>
@@ -190,6 +192,67 @@ function GeneratedTab() {
   )
 }
 
+function DetectedTab() {
+  const [items, setItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    detectionApi.list({ page_size: 50 })
+      .then(d => setItems(d.jobs || []))
+      .catch(e => toast.error(getErrorMessage(e)))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <div className="p-8 text-center"><Spinner /></div>
+  
+  if (items.length === 0) {
+    return <EmptyTabState icon={Shield} title="No Detections Yet" desc="Audio files you scan for deepfakes will appear in this log." />
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+      <table className="w-full text-left border-collapse">
+        <thead>
+          <tr className="bg-gray-50/50 border-b border-gray-100">
+            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Job ID</th>
+            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">File Details</th>
+            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Verdict</th>
+            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest text-right">Date</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {items.map(item => (
+            <tr key={item.id} className="hover:bg-gray-50/50 transition-colors group">
+              <td className="px-6 py-4">
+                <Link to={`/detection/${item.id}`} className="text-sm font-bold text-blue-600 hover:underline font-mono">
+                  {item.id.split('-')[0]}...
+                </Link>
+              </td>
+              <td className="px-6 py-4">
+                <div className="text-sm font-bold text-gray-900 truncate max-w-[200px]">{item.original_filename || 'Unknown file'}</div>
+                <div className="text-xs font-medium text-gray-500">
+                  {item.duration_seconds?.toFixed(1)}s
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                 <div className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] font-bold uppercase ${item.is_synthetic ? 'bg-red-50 text-red-600' : item.verdict ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-600'}`}>
+                   {item.verdict?.replace(/_/g, ' ') || item.status}
+                 </div>
+                 {item.ensemble_confidence !== null && item.ensemble_confidence !== undefined && (
+                   <div className="text-[10px] font-bold text-gray-400 mt-1">{(item.ensemble_confidence * 100).toFixed(1)}% CONF</div>
+                 )}
+              </td>
+              <td className="px-6 py-4 text-right text-sm font-medium text-gray-500">
+                {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function EmptyTabState({ icon: Icon, title, desc }: any) {
   return (
     <div className="border border-dashed border-gray-300 rounded-3xl bg-gray-50/50 p-12 text-center flex flex-col items-center justify-center">
@@ -207,7 +270,14 @@ function EmptyTabState({ icon: Icon, title, desc }: any) {
 export default function ProfilePage() {
   const { user, refreshUser, updateUser } = useAuthStore()
   const [uploading, setUploading] = useState(false)
-  const [activeTab, setActiveTab] = useState('profiles')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = searchParams.get('tab') || 'profiles'
+  const [activeTab, setActiveTab] = useState(initialTab)
+
+  const handleTabChange = (id: string) => {
+    setActiveTab(id)
+    setSearchParams({ tab: id })
+  }
   
   // Real data state
   const [recentGenerations, setRecentGenerations] = useState<any[]>([])
@@ -443,7 +513,7 @@ export default function ProfilePage() {
             return (
               <button
                 key={t.id}
-                onClick={() => setActiveTab(t.id)}
+                onClick={() => handleTabChange(t.id)}
                 className={`relative px-5 py-3 text-sm font-bold whitespace-nowrap transition-colors flex items-center gap-2 ${
                   active ? 'text-black' : 'text-gray-500 hover:text-gray-800'
                 }`}
@@ -476,7 +546,7 @@ export default function ProfilePage() {
             {activeTab === 'profiles' && <ProfilesTab user={user} />}
             {activeTab === 'cloned' && <ClonedTab user={user} />}
             {activeTab === 'generated' && <GeneratedTab />}
-            {activeTab === 'detected' && <EmptyTabState icon={Shield} title="No detections yet" desc="Audio files you scan for deepfakes will appear in this log." />}
+            {activeTab === 'detected' && <DetectedTab />}
             {activeTab === 'live' && <EmptyTabState icon={Activity} title="No live sessions" desc="Your real-time voice conversion history will be recorded here." />}
             {activeTab === 'hub' && <EmptyTabState icon={Bookmark} title="No saved voices" desc="Voices you bookmark from the community Hub will appear here." />}
             {activeTab === 'agents' && <EmptyTabState icon={Bot} title="No agents yet" desc="Voice agents you build will be displayed here." />}

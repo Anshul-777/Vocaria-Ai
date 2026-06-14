@@ -6,7 +6,7 @@ Deepfake detection: file upload, real-time, batch, evidence export.
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks, Query
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func
+from sqlalchemy import select, desc, func, and_
 from pydantic import BaseModel
 from typing import Optional, List
 import uuid, io, json, hashlib, logging
@@ -183,13 +183,7 @@ async def get_detection_result(
         ensemble_confidence=job.ensemble_confidence,
         is_synthetic=job.is_synthetic,
         risk_score=job.risk_score,
-        model_scores={
-            "aasist": job.aasist_score,
-            "rawnet2": job.rawnet2_score,
-            "prosodic": job.prosodic_score,
-            "spectral": job.spectral_score,
-            "glottal": job.glottal_score,
-        },
+        model_scores=job.pipeline_metrics or {},
         segments=job.segments or [],
         suspicious_segments=job.suspicious_segments or [],
         confidence_timeline=job.confidence_timeline or [],
@@ -363,13 +357,7 @@ async def export_detection_json(
             "risk_score": job.risk_score,
             "confidence_threshold": job.confidence_threshold,
         },
-        "model_scores": {
-            "aasist": job.aasist_score,
-            "rawnet2": job.rawnet2_score,
-            "prosodic": job.prosodic_score,
-            "spectral": job.spectral_score,
-            "glottal": job.glottal_score,
-        },
+        "model_scores": job.pipeline_metrics or {},
         "flagged_reasons": job.flagged_reasons,
         "explanation": job.explanation,
         "analyst_notes": job.analyst_notes,
@@ -467,10 +455,10 @@ async def get_detection_stats(
     # Calculate Accuracy Matrix based on user feedback
     feedback_stats = await db.execute(
         select(
-            func.count(DetectionJob.id).filter(DetectionJob.verdict == DetectionVerdict.AUTHENTIC, DetectionJob.user_feedback == True).label("true_authentic"),
-            func.count(DetectionJob.id).filter(DetectionJob.verdict == DetectionVerdict.SYNTHETIC, DetectionJob.user_feedback == False).label("false_synthetic"),
-            func.count(DetectionJob.id).filter(DetectionJob.verdict == DetectionVerdict.AUTHENTIC, DetectionJob.user_feedback == False).label("false_authentic"),
-            func.count(DetectionJob.id).filter(DetectionJob.verdict == DetectionVerdict.SYNTHETIC, DetectionJob.user_feedback == True).label("true_synthetic"),
+            func.count(DetectionJob.id).filter(and_(DetectionJob.is_synthetic == False, DetectionJob.user_feedback == True)).label("true_authentic"),
+            func.count(DetectionJob.id).filter(and_(DetectionJob.is_synthetic == True, DetectionJob.user_feedback == False)).label("false_synthetic"),
+            func.count(DetectionJob.id).filter(and_(DetectionJob.is_synthetic == False, DetectionJob.user_feedback == False)).label("false_authentic"),
+            func.count(DetectionJob.id).filter(and_(DetectionJob.is_synthetic == True, DetectionJob.user_feedback == True)).label("true_synthetic"),
         ).where(
             DetectionJob.user_id == current_user.id,
             DetectionJob.status == JobStatus.COMPLETED,
@@ -479,25 +467,38 @@ async def get_detection_stats(
     )
     fb_row = feedback_stats.one()
 
-    # Calculate sub-model performance metrics (real vs synthetic averages)
-    model_averages = await db.execute(
-        select(
-            func.avg(DetectionJob.aasist_score).filter(DetectionJob.is_synthetic == False).label("aasist_real"),
-            func.avg(DetectionJob.aasist_score).filter(DetectionJob.is_synthetic == True).label("aasist_synth"),
-            func.avg(DetectionJob.rawnet2_score).filter(DetectionJob.is_synthetic == False).label("rawnet2_real"),
-            func.avg(DetectionJob.rawnet2_score).filter(DetectionJob.is_synthetic == True).label("rawnet2_synth"),
-            func.avg(DetectionJob.prosodic_score).filter(DetectionJob.is_synthetic == False).label("prosodic_real"),
-            func.avg(DetectionJob.prosodic_score).filter(DetectionJob.is_synthetic == True).label("prosodic_synth"),
-            func.avg(DetectionJob.spectral_score).filter(DetectionJob.is_synthetic == False).label("spectral_real"),
-            func.avg(DetectionJob.spectral_score).filter(DetectionJob.is_synthetic == True).label("spectral_synth"),
-            func.avg(DetectionJob.glottal_score).filter(DetectionJob.is_synthetic == False).label("glottal_real"),
-            func.avg(DetectionJob.glottal_score).filter(DetectionJob.is_synthetic == True).label("glottal_synth"),
-        ).where(
+    # Fetch pipeline metrics to aggregate real models
+    metrics_query = await db.execute(
+        select(DetectionJob.pipeline_metrics).where(
             DetectionJob.user_id == current_user.id,
             DetectionJob.status == JobStatus.COMPLETED,
+            DetectionJob.pipeline_metrics.isnot(None)
         )
     )
-    m_row = model_averages.one()
+    metrics_rows = metrics_query.scalars().all()
+    
+    real_performance = {
+        "wav2vec2_deepfake": {"latency_ms": 0, "status": "offline", "count": 0},
+        "pyannote_diarization": {"latency_ms": 0, "status": "offline", "count": 0},
+        "squim_quality": {"latency_ms": 0, "status": "offline", "count": 0}
+    }
+    
+    for row in metrics_rows:
+        if not row: continue
+        for key, val in row.items():
+            if key not in real_performance:
+                real_performance[key] = {"latency_ms": 0, "status": "offline", "count": 0}
+            real_performance[key]["latency_ms"] += val.get("latency_ms", 0)
+            real_performance[key]["status"] = val.get("status", "offline")
+            real_performance[key]["count"] += 1
+            
+    model_performance = {}
+    for key, data in real_performance.items():
+        avg_latency = data["latency_ms"] / data["count"] if data["count"] > 0 else 0
+        model_performance[key] = {
+            "avg_latency_ms": round(avg_latency, 2),
+            "status": data["status"]
+        }
 
     return {
         "total_jobs": row.total or 0,
@@ -513,11 +514,5 @@ async def get_detection_stats(
             "false_authentic": fb_row.false_authentic or 0,
             "true_synthetic": fb_row.true_synthetic or 0
         },
-        "model_performance": {
-            "aasist": {"real": round(float(m_row.aasist_real or 0), 4), "synthetic": round(float(m_row.aasist_synth or 0), 4)},
-            "rawnet2": {"real": round(float(m_row.rawnet2_real or 0), 4), "synthetic": round(float(m_row.rawnet2_synth or 0), 4)},
-            "prosodic": {"real": round(float(m_row.prosodic_real or 0), 4), "synthetic": round(float(m_row.prosodic_synth or 0), 4)},
-            "spectral": {"real": round(float(m_row.spectral_real or 0), 4), "synthetic": round(float(m_row.spectral_synth or 0), 4)},
-            "glottal": {"real": round(float(m_row.glottal_real or 0), 4), "synthetic": round(float(m_row.glottal_synth or 0), 4)},
-        }
+        "model_performance": model_performance
     }

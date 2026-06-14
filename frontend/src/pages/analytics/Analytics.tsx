@@ -9,27 +9,50 @@ export default function Analytics() {
   const [overview, setOverview] = useState<any>(null)
   const [timeline, setTimeline] = useState<any[]>([])
   const [detStats, setDetStats] = useState<any>(null)
+  const [liveJobs, setLiveJobs] = useState<any[]>([])
   const [days, setDays] = useState(30)
   const [loading, setLoading] = useState(true)
   const [resourceChartType, setResourceChartType] = useState<'credits' | 'failures'>('credits')
+  const [showLiveVerdicts, setShowLiveVerdicts] = useState(false)
 
-  useEffect(() => {
-    setLoading(true)
+  const fetchData = () => {
     Promise.all([
       analyticsApi.overview().catch(() => null),
       analyticsApi.timeline(days).catch(() => ({ timeline: [] })),
       detectionApi.stats().catch(() => null),
-    ]).then(([ov, tl, det]) => {
-      setOverview(ov); setTimeline(tl?.timeline || []); setDetStats(det)
+      detectionApi.list({ limit: 50 }).catch(() => ({ jobs: [] }))
+    ]).then(([ov, tl, det, live]) => {
+      setOverview(ov)
+      setTimeline(tl?.timeline || [])
+      setDetStats(det)
+      setLiveJobs(live?.jobs || [])
     }).finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    setLoading(true)
+    fetchData()
+    const interval = setInterval(fetchData, 3000)
+    return () => clearInterval(interval)
   }, [days])
 
-  const verdictData = detStats?.verdict_distribution
-    ? Object.entries(detStats.verdict_distribution).map(([k, v]: any) => ({
-        name: k.replace(/_/g, ' '), value: v,
-        color: k === 'authentic' ? '#16a34a' : k.includes('synthetic') ? '#dc2626' : '#d97706',
-      }))
-    : []
+  const rawVerdictData = showLiveVerdicts
+    ? Object.entries(liveJobs.reduce((acc, job) => {
+        const v = String(job.verdict || 'UNKNOWN')
+        acc[v] = (acc[v] || 0) + 1
+        return acc
+      }, {} as any))
+    : detStats?.verdict_distribution
+      ? Object.entries(detStats.verdict_distribution)
+      : []
+
+  const verdictData = rawVerdictData.map(([k, v]: any) => {
+    const cleanName = String(k).replace('DetectionVerdict.', '').replace(/_/g, ' ').toLowerCase()
+    return {
+      name: cleanName, value: v,
+      color: cleanName.includes('authentic') ? '#16a34a' : cleanName.includes('synthetic') || cleanName.includes('manipulated') ? '#dc2626' : '#d97706',
+    }
+  })
 
   const PERIOD_OPTIONS = [7, 14, 30, 90]
 
@@ -49,11 +72,9 @@ export default function Analytics() {
 
   // Model performance variables
   const modelPerformance = detStats?.model_performance || {
-    aasist: { real: 0, synthetic: 0 },
-    rawnet2: { real: 0, synthetic: 0 },
-    prosodic: { real: 0, synthetic: 0 },
-    spectral: { real: 0, synthetic: 0 },
-    glottal: { real: 0, synthetic: 0 },
+    wav2vec2_deepfake: { avg_latency_ms: 0, status: "offline" },
+    squim_quality: { avg_latency_ms: 0, status: "offline" },
+    pyannote_diarization: { avg_latency_ms: 0, status: "offline" }
   };
 
   // Chart domain helpers to ensure 0 line displays correctly if all data is 0
@@ -145,7 +166,23 @@ export default function Analytics() {
 
         <Reveal delay={0.05}>
           <div className="card flex flex-col p-6 h-full">
-            <div className="font-600 text-sm text-black mb-5">Detection Verdicts</div>
+            <div className="flex justify-between items-center mb-5">
+              <div className="font-600 text-sm text-black">Detection Verdicts</div>
+              <div className="flex gap-1 bg-surface-50 p-1 border border-surface-200 rounded-lg">
+                <button
+                  onClick={() => setShowLiveVerdicts(true)}
+                  className={clsx(
+                    "px-3 py-1 rounded-md text-[10px] font-700 uppercase tracking-wide transition-all",
+                    showLiveVerdicts ? "bg-white text-brand-600 shadow-sm" : "text-surface-500 hover:text-black"
+                  )}>Live</button>
+                <button
+                  onClick={() => setShowLiveVerdicts(false)}
+                  className={clsx(
+                    "px-3 py-1 rounded-md text-[10px] font-700 uppercase tracking-wide transition-all",
+                    !showLiveVerdicts ? "bg-white text-brand-600 shadow-sm" : "text-surface-500 hover:text-black"
+                  )}>Overall</button>
+              </div>
+            </div>
             <div className="flex-1 flex flex-col justify-center">
               {loading || verdictData.length === 0 ? (
                 <div className="flex items-center justify-center flex-1 text-surface-400 text-sm">No detection data yet</div>
@@ -348,35 +385,43 @@ export default function Analytics() {
                   <table className="w-full text-left border-collapse text-xs">
                     <thead>
                       <tr className="border-b border-surface-200">
-                        <th className="py-2.5 px-2 font-700 text-surface-500 uppercase tracking-wider">Engine</th>
-                        <th className="py-2.5 px-2 font-700 text-surface-500 uppercase tracking-wider text-right">Real Avg</th>
-                        <th className="py-2.5 px-2 font-700 text-surface-500 uppercase tracking-wider text-right">Synth Avg</th>
-                        <th className="py-2.5 px-2 font-700 text-surface-500 uppercase tracking-wider text-right">Delta</th>
+                        <th className="py-2.5 px-2 font-700 text-surface-500 uppercase tracking-wider">Engine Module</th>
+                        <th className="py-2.5 px-2 font-700 text-surface-500 uppercase tracking-wider text-right">Function</th>
+                        <th className="py-2.5 px-2 font-700 text-surface-500 uppercase tracking-wider text-right">Avg Latency</th>
                         <th className="py-2.5 px-2 font-700 text-surface-500 uppercase tracking-wider text-right">Status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-surface-100">
                       {Object.entries(modelPerformance).map(([modelKey, data]: any) => {
-                        const realVal = data.real || 0;
-                        const synthVal = data.synthetic || 0;
-                        const gap = Math.max(0, synthVal - realVal);
-                        const reliability = gap > 0.4 ? 'High' : gap > 0.2 ? 'Moderate' : 'Low';
-                        const relColor = reliability === 'High' 
+                        const latency = data.avg_latency_ms || 0;
+                        const isOnline = data.status === 'online';
+                        const statusColor = isOnline 
                           ? 'text-success-600 bg-success-50 border-success-100' 
-                          : reliability === 'Moderate' 
-                            ? 'text-amber-600 bg-amber-50 border-amber-100' 
-                            : 'text-danger-600 bg-danger-50 border-danger-100';
+                          : 'text-danger-600 bg-danger-50 border-danger-100';
+                        
+                        let name = 'Unknown';
+                        let role = 'Processing';
+                        if (modelKey === 'wav2vec2_deepfake') {
+                          name = 'Wav2Vec2';
+                          role = 'Deepfake Detect';
+                        } else if (modelKey === 'pyannote_diarization') {
+                          name = 'Pyannote';
+                          role = 'Speaker Diarization';
+                        } else if (modelKey === 'squim_quality') {
+                          name = 'SQUIM';
+                          role = 'Quality Assessment';
+                        }
+                          
                         return (
                           <tr key={modelKey} className="hover:bg-surface-50/50 transition-colors">
-                            <td className="py-3 px-2 font-600 text-black capitalize">{modelKey}</td>
-                            <td className="py-3 px-2 text-right text-surface-600 font-500">{(realVal * 100).toFixed(0)}%</td>
-                            <td className="py-3 px-2 text-right text-surface-600 font-500">{(synthVal * 100).toFixed(0)}%</td>
-                            <td className="py-3 px-2 text-right font-700 text-black">
-                              +{(gap * 100).toFixed(0)}%
+                            <td className="py-3 px-2 font-600 text-black capitalize">
+                              {name}
                             </td>
+                            <td className="py-3 px-2 text-right text-surface-600 font-500">{role}</td>
+                            <td className="py-3 px-2 text-right text-surface-600 font-500">{latency > 0 ? `${latency} ms` : '< 1 ms'}</td>
                             <td className="py-3 px-2 text-right">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-700 border ${relColor}`}>
-                                {reliability}
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-700 border uppercase ${statusColor}`}>
+                                {isOnline ? 'Online' : 'Offline'}
                               </span>
                             </td>
                           </tr>

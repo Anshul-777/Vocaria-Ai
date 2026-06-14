@@ -43,3 +43,9 @@ tmp/
 Test/
 Test/Kokoro_Outputs/
 test_chatterbox_direct.py
+
+# Local Data
+*.db
+*.log
+*.tmp
+hub_audio/

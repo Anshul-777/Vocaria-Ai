@@ -24,7 +24,7 @@ class DetectionResult:
     ensemble_confidence: float
     is_synthetic: bool
     risk_score: float
-    model_scores: Dict[str, float]
+    pipeline_metrics: Dict[str, Any]
     segments: List[Dict[str, Any]]
     suspicious_segments: List[Dict[str, Any]]
     confidence_timeline: List[Dict[str, Any]]
@@ -78,11 +78,11 @@ class AudioDetectionPipeline:
         """Load the three models synchronously (run in executor)."""
 
         # 1. Torchaudio SQUIM (Quality Assessment)
-        logger.info("Loading SQUIM model...")
+        logger.info("Loading SQUIM model (downloading if not cached)...")
         self.squim_objective = torchaudio.pipelines.SQUIM_OBJECTIVE.get_model().to(self._device)
 
         # 2. Wav2Vec2 Deepfake Detector (garystafford/wav2vec2-deepfake-voice-detector)
-        logger.info("Loading Wav2Vec2 Deepfake Detector...")
+        logger.info("Loading Wav2Vec2 Deepfake Detector (this is a 1.2GB download if not cached, please wait)...")
         self.deepfake_classifier = pipeline(
             "audio-classification", 
             model="garystafford/wav2vec2-deepfake-voice-detector",
@@ -354,16 +354,23 @@ class AudioDetectionPipeline:
             is_synthetic = max_ai > confidence_threshold
             verdict = "synthetic_tts" if is_synthetic else "authentic"
             
-            # Simulated model scores using wav2vec2 as a base anchor
-            model_scores = {
-                "aasist": max_ai * 1.05 if max_ai > 0.5 else max_ai * 0.95,
-                "rawnet2": max_ai * 0.98 if max_ai > 0.5 else max_ai * 1.02,
-                "prosodic": max_ai * 0.90 if max_ai > 0.5 else max_ai * 0.80,
-                "spectral": max_ai * 1.10 if max_ai > 0.5 else max_ai * 1.05,
-                "glottal": max_ai * 0.85 if max_ai > 0.5 else max_ai * 0.90,
+            # Actual pipeline metrics mapped
+            pipeline_metrics = {
+                "wav2vec2_deepfake": {
+                    "latency_ms": int((time.time() - start_time) * 1000),  # Rough latency map
+                    "score": max_ai,
+                    "status": "online"
+                },
+                "pyannote_diarization": {
+                    "latency_ms": 0, # Could be calculated separately
+                    "status": "online" if self.diarization_pipeline else "offline",
+                    "speakers_detected": len(speakers)
+                },
+                "squim_quality": {
+                    "latency_ms": 0,
+                    "status": "online"
+                }
             }
-            # Clamp to 0-1
-            model_scores = {k: min(1.0, max(0.0, v)) for k, v in model_scores.items()}
             
             flagged_reasons = []
             if is_synthetic:
@@ -381,7 +388,7 @@ class AudioDetectionPipeline:
                 ensemble_confidence=max_ai,
                 is_synthetic=is_synthetic,
                 risk_score=max_ai, # Risk score same as AI conf for now
-                model_scores=model_scores,
+                pipeline_metrics=pipeline_metrics,
                 segments=segments,
                 suspicious_segments=suspicious_segments,
                 confidence_timeline=confidence_timeline,

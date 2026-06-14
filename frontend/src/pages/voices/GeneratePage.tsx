@@ -60,12 +60,20 @@ const KOKORO_STEPS = [
 ]
 const CHATTERBOX_STEPS = [
   { label: 'Loading Chatterbox Turbo', icon: '🚀' },
-  { label: 'Initializing GPU (RTX 3050)', icon: '🎮' },
+  { label: 'Initializing GPU', icon: '🎮' },
   { label: 'Processing text tokens', icon: '📝' },
   { label: 'Running diffusion model', icon: '🧬' },
   { label: 'Generating neural speech', icon: '🎵' },
   { label: 'Applying emotion contour', icon: '💜' },
   { label: 'Encoding & normalizing', icon: '💾' },
+]
+const PARLER_STEPS = [
+  { label: 'Parsing prompt semantics', icon: '🧠' },
+  { label: 'Configuring autoregressive model', icon: '⚙️' },
+  { label: 'Extracting acoustic features', icon: '🔍' },
+  { label: 'Generating audio stream', icon: '🌊' },
+  { label: 'Enhancing vocal clarity', icon: '✨' },
+  { label: 'Encoding final output', icon: '💾' },
 ]
 
 
@@ -92,21 +100,55 @@ export default function GeneratePage() {
   const [enhancingPrompt, setEnhancingPrompt] = useState(false)
   const [jobId, setJobId] = useState<string | null>(null)
   const [result, setResult] = useState<any>(null)
-  
+  const [recentJobs, setRecentJobs] = useState<any[]>([])
+
   const [voices, setVoices] = useState<any[]>([])
   const [selectedProfile, setSelectedProfile] = useState('')
   const [newProfileName, setNewProfileName] = useState('')
-  
+
   const [saving, setSaving] = useState(false)
   const [enhancingPhrase, setEnhancingPhrase] = useState(false)
-  
+
   const pollRef = useRef<NodeJS.Timeout>()
   const stepRef = useRef<NodeJS.Timeout>()
+
+  const fetchRecent = async () => {
+    try {
+      const data = await generationApi.list({ limit: 5 })
+      const items = data.items || data || []
+      setRecentJobs(Array.isArray(items) ? items : [])
+
+      const active = (Array.isArray(items) ? items : []).find((j: any) => j.status === 'pending' || j.status === 'processing')
+      if (active && !generating) {
+        setJobId(active.id)
+        if (active.model) setSelectedModel(active.model)
+        setGenerating(true)
+        pollForResult(active.id)
+
+        generationApi.getJob(active.id).then((fullJob: any) => {
+          if (fullJob.text) setTestText(fullJob.text)
+          if (fullJob.speaking_style) setPrompt(fullJob.speaking_style)
+          if (fullJob.language) setLanguage(fullJob.language)
+          if (fullJob.emotion) setEmotion(fullJob.emotion)
+          if (fullJob.extra_metadata) {
+            const m = fullJob.extra_metadata
+            if (m.gender) setGender(m.gender)
+            if (m.age) setAge(m.age)
+            if (m.accent) setAccent(m.accent)
+            if (m.exaggeration) setExaggeration(m.exaggeration)
+            if (m.cfg_weight) setCfgWeight(m.cfg_weight)
+          }
+        }).catch(() => {})
+      }
+    } catch (e) { }
+  }
 
   useEffect(() => {
     voicesApi.list({ page_size: 50 }).then(d => {
       setVoices(d.voices || [])
-    }).catch(() => {})
+    }).catch(() => { })
+
+    fetchRecent()
   }, [])
 
   // Update test phrase when switching models
@@ -122,10 +164,10 @@ export default function GeneratePage() {
   useEffect(() => {
     if (generating) {
       setGenStep(0)
-      const steps = selectedModel === 'chatterbox-turbo' ? CHATTERBOX_STEPS : KOKORO_STEPS
+      const steps = selectedModel === 'chatterbox-turbo' ? CHATTERBOX_STEPS : selectedModel === 'parler-tts' ? PARLER_STEPS : KOKORO_STEPS
       stepRef.current = setInterval(() => {
         setGenStep(prev => (prev < steps.length - 1 ? prev + 1 : prev))
-      }, selectedModel === 'chatterbox-turbo' ? 3000 : 1500)
+      }, selectedModel === 'chatterbox-turbo' ? 3000 : selectedModel === 'parler-tts' ? 2500 : 1500)
     } else {
       clearInterval(stepRef.current)
       setGenStep(0)
@@ -148,14 +190,14 @@ export default function GeneratePage() {
     }
     setGenerating(true)
     setResult(null)
-    
-    const payload: any = { 
-      text: testText, 
+
+    const payload: any = {
+      text: testText,
       language,
       emotion: selectedModel === 'chatterbox-turbo' ? cbEmotion : emotion,
       speaking_style: prompt,
-      speed, 
-      pitch, 
+      speed,
+      pitch,
       temperature: selectedModel === 'chatterbox-turbo' ? temperature : 0.7,
       output_format: 'wav',
       gender,
@@ -167,33 +209,27 @@ export default function GeneratePage() {
     }
 
     try {
-      const data = await generationApi.generateSync(payload)
-      
-      if (data.status === 'completed') {
+      const data = await generationApi.generate(payload)
+      const newJobId = data.job_id || data.id
+      if (newJobId) {
+        setJobId(newJobId)
+        pollForResult(newJobId)
+        toast.success('Synthesizing voice...')
+        setTimeout(fetchRecent, 1000)
+      } else if (data.status === 'completed') {
         setResult(data)
         setGenerating(false)
-        toast.success(`Voice synthesized with ${selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo (GPU)' : 'Kokoro 82M (CPU)'}!`)
-        return
+        toast.success(`Voice synthesized with ${selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo (GPU)' : selectedModel === 'parler-tts' ? 'Parler-TTS (CPU)' : 'Kokoro 82M (CPU)'}!`)
+        fetchRecent()
       } else if (data.status === 'failed') {
         setResult(data)
         setGenerating(false)
         toast.error(`Generation failed: ${data.error_message}`)
-        return
+        fetchRecent()
       }
-      
-      setJobId(data.job_id)
-      pollForResult(data.job_id)
-      toast.success('Synthesizing voice...')
     } catch (err: any) {
-      try {
-        const data = await generationApi.generate(payload)
-        setJobId(data.job_id)
-        pollForResult(data.job_id)
-        toast.success('Synthesizing voice (async)...')
-      } catch (err2) {
-        toast.error(getErrorMessage(err2))
-        setGenerating(false)
-      }
+      toast.error(getErrorMessage(err))
+      setGenerating(false)
     }
   }
 
@@ -207,21 +243,36 @@ export default function GeneratePage() {
         setJobId(null)
         setGenerating(false)
         setResult(data)
-        if (data.status === 'completed') toast.success('Voice synthesized successfully!')
-        else toast.error(`Generation failed: ${data.error_message}`)
+        if (data.status === 'completed') {
+          toast.success('Voice synthesized successfully!')
+          fetchRecent()
+        }
+        else {
+          toast.error(`Generation failed: ${data.error_message}`)
+          fetchRecent()
+        }
       }
     }, 1500)
+  }
+
+  const cancelGeneration = () => {
+    clearInterval(pollRef.current)
+    clearInterval(stepRef.current)
+    setGenerating(false)
+    setJobId(null)
+    setGenStep(0)
+    toast.error('Generation cancelled by user')
   }
 
   const handleSaveProfile = async () => {
     if (!selectedProfile) { toast.error('No target profile selected'); return }
     if (selectedProfile === 'new' && !newProfileName.trim()) { toast.error('Please name your new voice profile'); return }
     if (!result?.output_url) { toast.error('No generated voice to save'); return }
-    
+
     setSaving(true)
     try {
       let targetProfileId = selectedProfile
-      
+
       if (selectedProfile === 'new') {
         const newProfile = await voicesApi.create({
           name: newProfileName,
@@ -249,7 +300,7 @@ export default function GeneratePage() {
         })
         targetProfileId = newProfile.id
       }
-      
+
       if (jobId) {
         await voicesApi.attachGeneration(targetProfileId, jobId)
       } else if (result?.id) {
@@ -305,7 +356,7 @@ export default function GeneratePage() {
     }
   }
 
-  const currentSteps = selectedModel === 'chatterbox-turbo' ? CHATTERBOX_STEPS : KOKORO_STEPS
+  const currentSteps = selectedModel === 'chatterbox-turbo' ? CHATTERBOX_STEPS : selectedModel === 'parler-tts' ? PARLER_STEPS : KOKORO_STEPS
 
   return (
     <div className="w-full space-y-8 pb-12">
@@ -326,14 +377,14 @@ export default function GeneratePage() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'stretch' }}>
         {/* Input */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          
+
           <Reveal>
             <div className="card" style={{ padding: 24 }}>
               <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <label className="label" style={{ marginBottom: 0 }}>
                     Voice Description Prompt
-                    <Tip text={selectedModel === 'chatterbox-turbo' 
+                    <Tip text={selectedModel === 'chatterbox-turbo'
                       ? "Describe the speaking style you want. Chatterbox generates from its own neural voice — focus on emotion and delivery style rather than demographics."
                       : "Describe the voice identity. Kokoro will select the closest matching preset from 50+ built-in voices based on your gender, age, and accent selections."
                     } />
@@ -342,9 +393,9 @@ export default function GeneratePage() {
                     {enhancingPrompt ? <RefreshCw size={12} className="animate-spin" /> : <Wand2 size={12} />} Modify prompt
                   </button>
                 </div>
-                <textarea 
-                  value={prompt} 
-                  onChange={e => setPrompt(e.target.value)} 
+                <textarea
+                  value={prompt}
+                  onChange={e => setPrompt(e.target.value)}
                   rows={3}
                   placeholder={selectedModel === 'parler-tts'
                     ? "E.g., A female speaker delivers a slightly expressive and animated speech..."
@@ -352,8 +403,8 @@ export default function GeneratePage() {
                       ? "E.g., A warm, conversational voice telling a bedtime story with gentle pauses and soft laughter..."
                       : "E.g., A deep, raspy voice of an old wizard speaking slowly and mysteriously..."
                   }
-                  className="input textarea" 
-                  style={{ fontFamily: "'DM Sans', sans-serif", lineHeight: 1.6, resize: 'none' }} 
+                  className="input textarea"
+                  style={{ fontFamily: "'DM Sans', sans-serif", lineHeight: 1.6, resize: 'none' }}
                 />
               </div>
 
@@ -361,25 +412,25 @@ export default function GeneratePage() {
               {selectedModel === 'kokoro-82m' && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 16 }}>
                   <div>
-                    <label className="label text-xs"><UserCircle size={14} className="inline mr-1"/> Gender <Tip text="Kokoro selects different voice presets for male and female. These map directly to distinct neural voice models." /></label>
+                    <label className="label text-xs"><UserCircle size={14} className="inline mr-1" /> Gender <Tip text="Kokoro selects different voice presets for male and female. These map directly to distinct neural voice models." /></label>
                     <select value={gender} onChange={e => setGender(e.target.value)} className="input select text-sm">
                       {KOKORO_GENDERS.map(g => <option key={g} value={g}>{g}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="label text-xs"><Clock size={14} className="inline mr-1"/> Age <Tip text="Maps to different voice characteristics — younger voices are brighter and faster, older voices are deeper with more gravitas." /></label>
+                    <label className="label text-xs"><Clock size={14} className="inline mr-1" /> Age <Tip text="Maps to different voice characteristics — younger voices are brighter and faster, older voices are deeper with more gravitas." /></label>
                     <select value={age} onChange={e => setAge(e.target.value)} className="input select text-sm">
                       {KOKORO_AGES.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="label text-xs"><Globe size={14} className="inline mr-1"/> Accent <Tip text="Kokoro has separate voice models trained for each accent region. American and British have the most presets." /></label>
+                    <label className="label text-xs"><Globe size={14} className="inline mr-1" /> Accent <Tip text="Kokoro has separate voice models trained for each accent region. American and British have the most presets." /></label>
                     <select value={accent} onChange={e => setAccent(e.target.value)} className="input select text-sm">
                       {KOKORO_ACCENTS.map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="label text-xs"><Globe size={14} className="inline mr-1"/> Language <Tip text="Kokoro supports 10 languages. The model reloads when switching away from English." /></label>
+                    <label className="label text-xs"><Globe size={14} className="inline mr-1" /> Language <Tip text="Kokoro supports 10 languages. The model reloads when switching away from English." /></label>
                     <select value={language} onChange={e => setLanguage(e.target.value)} className="input select text-sm">
                       {KOKORO_LANGUAGES.map(l => <option key={l} value={l}>{KOKORO_LANG_LABELS[l] || l}</option>)}
                     </select>
@@ -406,6 +457,10 @@ export default function GeneratePage() {
                         display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left', position: 'relative',
                       }}
                     >
+                      {/* Fast badge */}
+                      <div style={{ position: 'absolute', top: -8, right: 8, background: 'linear-gradient(135deg, #2563eb, #3b82f6)', color: 'white', fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 3, boxShadow: '0 2px 8px rgba(37,99,235,0.3)' }}>
+                        <Zap size={8} fill="white" /> FAST
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Cpu size={14} style={{ color: selectedModel === 'kokoro-82m' ? '#2563eb' : '#94a3b8' }} />
                         <span style={{ fontSize: 13, fontWeight: 700, color: selectedModel === 'kokoro-82m' ? '#2563eb' : '#334155' }}>Kokoro 82M</span>
@@ -421,10 +476,6 @@ export default function GeneratePage() {
                         display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left', position: 'relative',
                       }}
                     >
-                      {/* Recommended badge */}
-                      <div style={{ position: 'absolute', top: -8, right: 8, background: 'linear-gradient(135deg, #7c3aed, #a855f7)', color: 'white', fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 3, boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}>
-                        <Star size={8} fill="white" /> REC
-                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Zap size={14} style={{ color: selectedModel === 'chatterbox-turbo' ? '#7c3aed' : '#94a3b8' }} />
                         <span style={{ fontSize: 13, fontWeight: 700, color: selectedModel === 'chatterbox-turbo' ? '#7c3aed' : '#334155' }}>Chatterbox</span>
@@ -440,6 +491,10 @@ export default function GeneratePage() {
                         display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left', position: 'relative',
                       }}
                     >
+                      {/* SOTA badge */}
+                      <div style={{ position: 'absolute', top: -8, right: 8, background: 'linear-gradient(135deg, #059669, #10b981)', color: 'white', fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 3, boxShadow: '0 2px 8px rgba(5,150,105,0.3)' }}>
+                        <Sparkles size={8} fill="white" /> STATE OF THE ART
+                      </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Wand2 size={14} style={{ color: selectedModel === 'parler-tts' ? '#059669' : '#94a3b8' }} />
                         <span style={{ fontSize: 13, fontWeight: 700, color: selectedModel === 'parler-tts' ? '#059669' : '#334155' }}>Parler-TTS</span>
@@ -536,7 +591,7 @@ export default function GeneratePage() {
             <div className="card" style={{ padding: 24 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <label className="label" style={{ marginBottom: 0 }}>
-                  <Volume2 size={16} className="inline mr-1"/> Test Phrase
+                  <Volume2 size={16} className="inline mr-1" /> Test Phrase
                   <Tip text={selectedModel === 'chatterbox-turbo'
                     ? "Enter what the voice should say. You can insert [laugh], [sigh], [cough], [chuckle] tags for natural human expressions."
                     : "Enter a short phrase for the voice to speak so you can preview the generated identity."
@@ -552,12 +607,12 @@ export default function GeneratePage() {
                   : 'Enter a short phrase for the new voice to speak so you can preview the generated identity.'
                 }
               </p>
-              <textarea 
-                value={testText} 
-                onChange={e => setTestText(e.target.value)} 
+              <textarea
+                value={testText}
+                onChange={e => setTestText(e.target.value)}
                 rows={2}
-                className="input textarea" 
-                style={{ fontFamily: "'DM Sans', sans-serif", resize: 'none' }} 
+                className="input textarea"
+                style={{ fontFamily: "'DM Sans', sans-serif", resize: 'none' }}
               />
             </div>
           </Reveal>
@@ -567,47 +622,70 @@ export default function GeneratePage() {
 
         {/* Action & Output */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          
+
           <Reveal>
-            <motion.button 
-              onClick={generate} 
-              disabled={generating} 
-              whileHover={{ scale: 1.01 }} 
-              whileTap={{ scale: 0.98 }}
-              style={{ 
-                width: '100%', padding: '16px', borderRadius: 16, border: 'none', 
-                background: generating ? '#94a3b8' : selectedModel === 'chatterbox-turbo' 
-                  ? 'linear-gradient(135deg, #7c3aed, #a855f7)' 
-                  : selectedModel === 'parler-tts'
-                    ? 'linear-gradient(135deg, #059669, #10b981)'
-                    : 'linear-gradient(135deg, #2563eb, #3b82f6)', 
-                color: 'white', fontSize: 16, fontWeight: 700, 
-                cursor: generating ? 'not-allowed' : 'pointer', 
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, 
-                boxShadow: generating ? 'none' : selectedModel === 'chatterbox-turbo'
-                  ? '0 8px 24px rgba(124,58,237,0.28)'
-                  : '0 8px 24px rgba(37,99,235,0.28)', 
-                fontFamily: 'Syne, sans-serif' 
-              }}>
-              {generating ? (
-                <>
+            {generating ? (
+              <div style={{ display: 'flex', gap: 12, width: '100%' }}>
+                <div style={{
+                  flex: 1, padding: '16px', borderRadius: 16, border: 'none',
+                  background: selectedModel === 'chatterbox-turbo'
+                    ? 'linear-gradient(135deg, #7c3aed, #a855f7)'
+                    : selectedModel === 'parler-tts'
+                      ? 'linear-gradient(135deg, #059669, #10b981)'
+                      : 'linear-gradient(135deg, #2563eb, #3b82f6)',
+                  color: 'white', fontSize: 16, fontWeight: 700,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  fontFamily: 'Syne, sans-serif'
+                }}>
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
                     <RefreshCw size={18} />
                   </motion.div>
-                  Generating with {selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo' : selectedModel === 'parler-tts' ? 'Parler-TTS' : 'Kokoro 82M'}...
-                </>
-              ) : (
+                  Generating with {selectedModel === 'chatterbox-turbo' ? 'Chatterbox' : selectedModel === 'parler-tts' ? 'Parler-TTS' : 'Kokoro'}...
+                </div>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={cancelGeneration}
+                  style={{
+                    background: '#fee2e2', color: '#dc2626', fontSize: 15, fontWeight: 700,
+                    padding: '0 24px', borderRadius: 16, border: '1px solid #fecaca',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontFamily: 'Syne, sans-serif', cursor: 'pointer'
+                  }}>
+                  Cancel
+                </motion.button>
+              </div>
+            ) : (
+              <motion.button
+                onClick={generate}
+                whileHover={{ scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+                style={{
+                  width: '100%', padding: '16px', borderRadius: 16, border: 'none',
+                  background: selectedModel === 'chatterbox-turbo'
+                    ? 'linear-gradient(135deg, #7c3aed, #a855f7)'
+                    : selectedModel === 'parler-tts'
+                      ? 'linear-gradient(135deg, #059669, #10b981)'
+                      : 'linear-gradient(135deg, #2563eb, #3b82f6)',
+                  color: 'white', fontSize: 16, fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                  boxShadow: selectedModel === 'chatterbox-turbo'
+                    ? '0 8px 24px rgba(124,58,237,0.28)'
+                    : '0 8px 24px rgba(37,99,235,0.28)',
+                  fontFamily: 'Syne, sans-serif'
+                }}>
                 <><Wand2 size={18} /> Generate with {selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo (GPU)' : selectedModel === 'parler-tts' ? 'Parler-TTS (CPU)' : 'Kokoro 82M (CPU)'}</>
-              )}
-            </motion.button>
+              </motion.button>
+            )}
           </Reveal>
 
           {/* Generating state — Pipeline visualization */}
           <AnimatePresence>
             {generating && (
-              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }} 
+              <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
                 className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                
+
                 {/* Animated orb */}
                 <div style={{ position: 'relative', width: 72, height: 72, marginBottom: 20 }}>
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
@@ -615,16 +693,16 @@ export default function GeneratePage() {
                   <motion.div animate={{ rotate: -360 }} transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
                     style={{ position: 'absolute', inset: -14, border: '1px solid', borderColor: selectedModel === 'chatterbox-turbo' ? '#c4b5fd' : selectedModel === 'parler-tts' ? '#6ee7b7' : '#bfdbfe', borderRadius: '50%', opacity: 0.25 }} />
                   <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 2, repeat: Infinity }}
-                    style={{ 
+                    style={{
                       position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: selectedModel === 'chatterbox-turbo' 
-                        ? 'linear-gradient(135deg, #7c3aed, #a855f7)' 
+                      background: selectedModel === 'chatterbox-turbo'
+                        ? 'linear-gradient(135deg, #7c3aed, #a855f7)'
                         : selectedModel === 'parler-tts'
                           ? 'linear-gradient(135deg, #059669, #10b981)'
                           : 'linear-gradient(135deg, #2563eb, #60a5fa)',
                       borderRadius: '50%', color: 'white',
-                      boxShadow: selectedModel === 'chatterbox-turbo' 
-                        ? '0 0 30px rgba(124,58,237,0.5)' 
+                      boxShadow: selectedModel === 'chatterbox-turbo'
+                        ? '0 0 30px rgba(124,58,237,0.5)'
                         : '0 0 30px rgba(37,99,235,0.5)',
                     }}>
                     {selectedModel === 'chatterbox-turbo' ? <Zap size={28} /> : <Activity size={28} />}
@@ -686,7 +764,7 @@ export default function GeneratePage() {
                   <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 14, color: '#0a0f1e', display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#059669' }} />
                     Generated Preview
-                    <span style={{ 
+                    <span style={{
                       fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
                       background: selectedModel === 'chatterbox-turbo' ? '#ede9fe' : selectedModel === 'parler-tts' ? '#d1fae5' : '#dbeafe',
                       color: selectedModel === 'chatterbox-turbo' ? '#7c3aed' : selectedModel === 'parler-tts' ? '#059669' : '#2563eb',
@@ -699,17 +777,17 @@ export default function GeneratePage() {
                     {result.duration_seconds?.toFixed(1)}s
                   </div>
                 </div>
-                
+
                 {result.output_url && (
                   <WaveformVisualizer url={result.output_url} height={64} showControls showDownload={false} />
                 )}
-                
+
                 <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid #f1f5f9' }}>
                   <label className="label" style={{ marginBottom: 4 }}>Save Voice</label>
                   <p style={{ color: '#94a3b8', fontSize: 12, marginBottom: 12 }}>
                     Select an existing profile to add this voice to, or create a new profile.
                   </p>
-                  
+
                   <div style={{ marginBottom: 16 }}>
                     <select value={selectedProfile} onChange={e => setSelectedProfile(e.target.value)} className="input select" style={{ marginBottom: selectedProfile === 'new' ? 12 : 0 }}>
                       <option value="">— Select Target Profile —</option>
@@ -717,8 +795,8 @@ export default function GeneratePage() {
                       {voices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
                     </select>
                     {selectedProfile === 'new' && (
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={newProfileName}
                         onChange={e => setNewProfileName(e.target.value)}
                         placeholder="E.g., Mysterious Wizard"
@@ -726,18 +804,18 @@ export default function GeneratePage() {
                       />
                     )}
                   </div>
-                  
+
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={handleSaveProfile} disabled={saving} className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
-                      {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />} 
+                      {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
                       Save Voice
                     </button>
-                    <a 
-                      href={result.output_url} 
+                    <a
+                      href={result.output_url}
                       download={`Vocaria_Generation_${new Date().getTime()}.wav`}
                       target="_blank"
                       rel="noreferrer"
-                      className="btn btn-secondary px-3" 
+                      className="btn btn-secondary px-3"
                       title="Download Audio"
                     >
                       <Download size={16} />
@@ -753,6 +831,68 @@ export default function GeneratePage() {
 
         </div>
       </div>
+
+      {/* Recent Generations Queue */}
+      {recentJobs.length > 0 && (
+        <Reveal delay={0.1}>
+          <div className="card" style={{ padding: 24, marginTop: 32 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0a0f1e', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Activity size={16} style={{ color: '#6366f1' }} />
+              Recent Generations
+            </h3>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>
+                    <th style={{ padding: '12px 8px', fontWeight: 600 }}>Model</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600 }}>Text</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600 }}>Status</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600 }}>Result</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentJobs.map((job) => (
+                    <tr key={job.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '12px 8px', fontWeight: 500, color: '#334155' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {job.model === 'chatterbox-turbo' ? <Zap size={14} style={{ color: '#7c3aed' }} /> : job.model === 'parler-tts' ? <Sparkles size={14} style={{ color: '#059669' }} /> : <Cpu size={14} style={{ color: '#2563eb' }} />}
+                          {job.model === 'chatterbox-turbo' ? 'Chatterbox' : job.model === 'parler-tts' ? 'Parler-TTS' : 'Kokoro 82M'}
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 8px', color: '#64748b', maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {job.text || '...'}
+                      </td>
+                      <td style={{ padding: '12px 8px' }}>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                          background: job.status === 'completed' ? '#d1fae5' : job.status === 'failed' ? '#fee2e2' : '#fef3c7',
+                          color: job.status === 'completed' ? '#059669' : job.status === 'failed' ? '#dc2626' : '#d97706'
+                        }}>
+                          {job.status === 'processing' ? 'Processing...' : job.status === 'pending' ? 'Queued' : job.status === 'completed' ? 'Success' : 'Failed'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 8px' }}>
+                        {job.status === 'completed' && job.output_url ? (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => setResult(job)} className="text-blue-600 hover:text-blue-800 font-600 text-xs flex items-center gap-1">
+                              <Play size={12} /> View
+                            </button>
+                            <a href={job.output_url} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-gray-800"><Download size={14} /></a>
+                          </div>
+                        ) : job.status === 'failed' ? (
+                          <span style={{ color: '#dc2626', fontSize: 11 }}>{job.error_message || 'Error'}</span>
+                        ) : (
+                          <RefreshCw size={14} className="animate-spin text-gray-400" />
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Reveal>
+      )}
     </div>
   )
 }

@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   FlaskConical, Upload, FileAudio, X, CheckCircle, AlertTriangle,
   XCircle, Mic, Volume2, Activity, BarChart2, Clock, Zap, Info,
-  ChevronDown, ChevronUp, Download
+  ChevronDown, ChevronUp, Download, ShieldAlert, Users
 } from 'lucide-react'
 import { qualityApi, getErrorMessage } from '@/api/client'
 import { Reveal, StaggerGroup, StaggerItem, Spinner, WaveBars } from '@/components/ui/shared'
@@ -22,6 +22,8 @@ interface QualityResult {
   peak_db: number
   speech_ratio: number
   quality_score: number
+  deepfake_prob: number
+  speaker_count: number
   suitability: string
   issues: string[]
   recommendations: string[]
@@ -189,7 +191,7 @@ export default function QualityPage() {
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-2">
           <div>
             <div className="flex items-center gap-3"><FlaskConical className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-cyan-500 to-blue-500 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>Quality Lab</h1></div>
-            <p className="text-gray-500 font-medium mt-2 text-sm md:text-base">Analyze audio quality, SNR, speech content, and suitability for voice cloning.</p>
+            <p className="text-gray-500 font-medium mt-2 text-sm md:text-base">Analyze audio quality, SNR, deepfake probability, diarization, and suitability for voice cloning.</p>
           </div>
           {result && (
             <button onClick={exportReport} className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-md hover:shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-all whitespace-nowrap flex items-center gap-2">
@@ -289,7 +291,7 @@ export default function QualityPage() {
               {/* Metrics grid */}
               <div>
                 <h3 className="text-xs font-bold text-gray-800 uppercase tracking-widest mb-4">Acoustic Metrics</h3>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <MetricCard label="SNR" value={result.snr_db} unit="dB" icon={Activity}
                     color={result.snr_db >= 30 ? '#16a34a' : result.snr_db >= 15 ? '#d97706' : '#dc2626'}
                     tooltip="Signal-to-noise ratio. 30dB+ is ideal." />
@@ -303,6 +305,10 @@ export default function QualityPage() {
                     color={result.speech_ratio >= 0.6 ? '#16a34a' : result.speech_ratio >= 0.3 ? '#d97706' : '#dc2626'}
                     tooltip="Fraction of audio containing speech. Higher is better." />
                   <MetricCard label="Sample Rate" value={result.sample_rate?.toLocaleString()} unit="Hz" icon={Zap} tooltip="Audio sample rate. 16kHz+ is acceptable." />
+                  <MetricCard label="AI Prob." value={`${(result.deepfake_prob * 100).toFixed(0)}%`} unit="" icon={ShieldAlert}
+                    color={result.deepfake_prob < 0.3 ? '#16a34a' : result.deepfake_prob < 0.7 ? '#d97706' : '#dc2626'}
+                    tooltip="Probability that this audio is AI-generated (Deepfake)." />
+                  <MetricCard label="Speakers" value={result.speaker_count} unit="" icon={Users} tooltip="Number of unique speakers detected (Diarization)." />
                 </div>
               </div>
 
@@ -338,7 +344,7 @@ export default function QualityPage() {
                 {showRadar && (
                   <motion.div className="border border-gray-200 rounded-2xl bg-white shadow-sm p-6 overflow-hidden" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}>
                     <ResponsiveContainer width="100%" height={260}>
-                      <RadarChart data={radarData}>
+                      <RadarChart data={radarData} cx="50%" cy="50%" outerRadius="70%">
                         <PolarGrid stroke="var(--border)" />
                         <PolarAngleAxis dataKey="metric" tick={{ fontSize: 12, fill: 'var(--fg-4)' }} />
                         <Radar name="Score" dataKey="value" stroke="var(--blue)" fill="var(--blue)" fillOpacity={0.12} strokeWidth={2} />
