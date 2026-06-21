@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Mic2, Shield, Wand2, Globe, Activity, Zap, ArrowRight, Plus,
-  TrendingUp, Clock, CheckCircle, AlertTriangle, Users, Gauge, Video
+  TrendingUp, Clock, CheckCircle, AlertTriangle, Users, Gauge, Video, Star
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { analyticsApi, hubApi } from '@/api/client'
@@ -96,9 +96,16 @@ export default function Dashboard() {
           <p className="text-gray-500 font-medium mt-2 text-sm md:text-base">Your creative workspace is ready. Let's build something amazing today.</p>
         </div>
         <div className="flex items-center gap-3">
-          <Link to="/billing" className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-md hover:shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-all whitespace-nowrap">
-            Upgrade to Pro
-          </Link>
+          {user?.plan_tier === 'enterprise' && (
+            <div className="bg-gradient-to-r from-amber-500 to-orange-600 text-white px-5 py-2.5 rounded-full text-sm font-bold shadow-md flex items-center gap-2">
+              <Star size={16} fill="currentColor" /> Enterprise Plan
+            </div>
+          )}
+          {user?.plan_tier !== 'enterprise' && (
+            <Link to="/billing" className="bg-black text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-md hover:shadow-xl hover:scale-[1.03] active:scale-[0.98] transition-all whitespace-nowrap">
+              {user?.plan_tier === 'pro' ? 'Upgrade to Enterprise' : 'Upgrade to Pro'}
+            </Link>
+          )}
         </div>
       </motion.div>
 

@@ -193,6 +193,7 @@ class TTSPipeline:
         gender: str = "female",
         accent: str = "american",
         age: str = "young adult",
+        **kwargs,
     ) -> Tuple[bytes, int]:
         """
         Generate speech from text using Kokoro-82M.
@@ -598,7 +599,15 @@ class ParlerTTSPipeline:
 
             # Use mini-v1 for speed, or let user configure
             model_id = "parler-tts/parler-tts-mini-v1"
-            self._model = ParlerTTSForConditionalGeneration.from_pretrained(model_id).to(self._device)
+            if self._device == "cuda":
+                self._model = ParlerTTSForConditionalGeneration.from_pretrained(
+                    model_id,
+                    torch_dtype=torch.float16,
+                    low_cpu_mem_usage=True
+                ).to(self._device)
+            else:
+                self._model = ParlerTTSForConditionalGeneration.from_pretrained(model_id).to(self._device)
+            
             self._tokenizer = AutoTokenizer.from_pretrained(model_id)
             self.sample_rate = self._model.config.sampling_rate
             logger.info(f"Parler-TTS ({model_id}) loaded (device={self._device}, sr={self.sample_rate})")
@@ -630,10 +639,20 @@ class ParlerTTSPipeline:
                     # Parler-TTS prompt mapping:
                     # prompt -> input_ids
                     # text -> prompt_input_ids
-                    input_ids = self._tokenizer(voice_prompt, return_tensors="pt").input_ids.to(self._device)
-                    prompt_input_ids = self._tokenizer(text, return_tensors="pt").input_ids.to(self._device)
+                    tokenized_prompt = self._tokenizer(voice_prompt, return_tensors="pt")
+                    input_ids = tokenized_prompt.input_ids.to(self._device)
+                    attention_mask = tokenized_prompt.attention_mask.to(self._device)
 
-                    generation = self._model.generate(input_ids=input_ids, prompt_input_ids=prompt_input_ids)
+                    tokenized_text = self._tokenizer(text, return_tensors="pt")
+                    prompt_input_ids = tokenized_text.input_ids.to(self._device)
+                    prompt_attention_mask = tokenized_text.attention_mask.to(self._device)
+
+                    generation = self._model.generate(
+                        input_ids=input_ids,
+                        attention_mask=attention_mask,
+                        prompt_input_ids=prompt_input_ids,
+                        prompt_attention_mask=prompt_attention_mask
+                    )
                     audio_np = generation.cpu().numpy().squeeze().astype(np.float32)
                     return audio_np
                 finally:

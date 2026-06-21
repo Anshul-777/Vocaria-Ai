@@ -175,4 +175,5 @@ export function Modal({ open, onClose, title, children, size = 'md' }: {
   )
 }
 
+export { RecentDetections } from './RecentDetections'
 export default UserAvatar

@@ -260,7 +260,8 @@ async def chat_with_agent(
     await db.refresh(job)
 
     from app.workers.generation_tasks import _run_gen_async
-    background_tasks.add_task(_run_gen_async, None, job.id, current_user.id)
+    import asyncio
+    asyncio.create_task(_run_gen_async(None, job.id, current_user.id))
     import uuid
     job.celery_task_id = f"local-{uuid.uuid4()}"
     await db.commit()

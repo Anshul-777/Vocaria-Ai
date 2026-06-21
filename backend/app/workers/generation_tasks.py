@@ -151,7 +151,7 @@ async def _run_gen_async(task, job_id, user_id):
                 job.error_message = str(e)[:500]
                 job.completed_at = datetime.now(timezone.utc)
                 await db.commit()
-        if task.request.retries < task.max_retries:
+        if task and getattr(task.request, "retries", 0) < getattr(task, "max_retries", 0):
             raise task.retry(exc=e, countdown=60)
     finally:
         pass  # No temporary files to clean up with Kokoro

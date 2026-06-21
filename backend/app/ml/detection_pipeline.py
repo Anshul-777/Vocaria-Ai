@@ -208,6 +208,128 @@ class AudioDetectionPipeline:
             
         return await loop.run_in_executor(None, _process)
 
+    async def analyze_chunk_stream(self, audio_bytes: bytes, sample_rate: int, confidence_threshold: float = 0.65) -> Dict[str, Any]:
+        """
+        Analyzes a streaming audio chunk, performing diarization and deepfake detection on multiple speakers.
+        """
+        await self.ensure_loaded()
+        
+        loop = asyncio.get_event_loop()
+        
+        def _process():
+            import soundfile as sf
+            import torch
+            import numpy as np
+            import io
+            
+            # Load audio
+            audio_buffer = io.BytesIO(audio_bytes)
+            try:
+                waveform_np, sr = sf.read(audio_buffer)
+            except Exception:
+                from pydub import AudioSegment
+                seg = AudioSegment.from_file(io.BytesIO(audio_bytes))
+                seg = seg.set_channels(1)
+                waveform_np = np.array(seg.get_array_of_samples(), dtype=np.float32) / 32768.0
+                sr = seg.frame_rate
+            
+            if len(waveform_np.shape) == 1:
+                waveform_np = waveform_np[np.newaxis, :]
+            else:
+                waveform_np = waveform_np.T
+                
+            waveform = torch.from_numpy(waveform_np).float()
+            duration_seconds = waveform_np.shape[-1] / sr
+            
+            speakers = []
+            
+            if self.diarization_pipeline is not None:
+                try:
+                    diarization = self.diarization_pipeline({"waveform": waveform, "sample_rate": sr})
+                    speaker_segments = {}
+                    for turn, _, speaker in diarization.itertracks(yield_label=True):
+                        # Clean up pyannote speaker names like "SPEAKER_00" to "Speaker A"
+                        spk_idx = speaker.split("_")[-1] if "_" in speaker else speaker
+                        try:
+                            # Try to map 00 -> A, 01 -> B
+                            spk_char = chr(65 + int(spk_idx))
+                            friendly_name = f"Speaker {spk_char}"
+                        except Exception:
+                            friendly_name = speaker
+
+                        if friendly_name not in speaker_segments:
+                            speaker_segments[friendly_name] = []
+                        speaker_segments[friendly_name].append((turn.start, turn.end))
+                    
+                    for speaker, spk_segments in speaker_segments.items():
+                        longest_segment = max(spk_segments, key=lambda x: x[1] - x[0])
+                        start_sample = int(longest_segment[0] * sr)
+                        end_sample = int(longest_segment[1] * sr)
+                        
+                        segment_waveform = waveform[:, start_sample:end_sample]
+                        audio_np = segment_waveform.squeeze().cpu().numpy()
+                        
+                        if len(audio_np.shape) == 0:
+                            audio_np = np.expand_dims(audio_np, 0)
+                            
+                        if len(audio_np) > int(0.2 * sr):  # Only process if > 200ms
+                            probs = self._get_deepfake_score(audio_np, sr)
+                            speakers.append({
+                                "id": speaker,
+                                "probabilities": probs,
+                                "is_suspicious": probs.get("ai_generated", 0) > confidence_threshold,
+                                "duration_sec": sum(seg[1] - seg[0] for seg in spk_segments)
+                            })
+                except Exception as e:
+                    logger.error(f"Diarization failed on chunk: {e}")
+            
+            # Fallback if no speakers found and NO diarization model
+            if not speakers and self.diarization_pipeline is None:
+                audio_np = waveform.squeeze().cpu().numpy()
+                probs = self._get_deepfake_score(audio_np, sr)
+                speakers.append({
+                    "id": "Speaker A",
+                    "probabilities": probs,
+                    "is_suspicious": probs.get("ai_generated", 0) > confidence_threshold,
+                    "duration_sec": duration_seconds
+                })
+            elif not speakers:
+                # Diarization is loaded but found no speakers (Silence/Noise)
+                return {
+                    "ensemble_score": 0.0,
+                    "verdict": "authentic",
+                    "is_suspicious": False,
+                    "speakers": [],
+                    "flagged_reasons": ["No speech detected"],
+                    "model_scores": {"wav2vec2": 0.0}
+                }
+            
+            # Compute chunk-level metrics
+            max_ai = max(s["probabilities"].get("ai_generated", 0) for s in speakers)
+            is_suspicious = max_ai > confidence_threshold
+            verdict = "synthetic" if is_suspicious else ("suspicious" if max_ai > 0.4 else "authentic")
+            
+            flagged_reasons = []
+            if is_suspicious:
+                flagged_reasons.append("Wav2Vec2 flagged synthetic audio in this chunk.")
+            if len(speakers) > 1:
+                flagged_reasons.append(f"Multiple speakers detected ({len(speakers)}).")
+            
+            self._cleanup_vram()
+            
+            return {
+                "ensemble_score": max_ai,
+                "verdict": verdict,
+                "is_suspicious": is_suspicious,
+                "speakers": speakers,
+                "flagged_reasons": flagged_reasons,
+                "model_scores": {
+                    "wav2vec2": max_ai
+                }
+            }
+            
+        return await loop.run_in_executor(None, _process)
+
     async def analyze_file(
         self,
         audio_path: str,

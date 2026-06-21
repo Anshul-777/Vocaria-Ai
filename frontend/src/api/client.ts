@@ -101,6 +101,7 @@ export const cloningApi = {
     api.post('/cloning/start', d).then(r => r.data),
   getJob: (id: string) => api.get(`/cloning/${id}`).then(r => r.data),
   listJobs: (params?: any) => api.get('/cloning/', { params }).then(r => r.data),
+  deleteJob: (jobId: string) => api.delete(`/cloning/${jobId}`).then(r => r.data),
   uploadSample: (voiceProfileId: string, file: File, onProgress?: (pct: number) => void) => {
     const form = new FormData()
     form.append('file', file)
@@ -117,6 +118,7 @@ export const generationApi = {
   generateSync: (d: any) => api.post('/generation/sync', d, { timeout: 600000 }).then(r => r.data),
   getJob: (id: string) => api.get(`/generation/${id}`).then(r => r.data),
   list: (params?: any) => api.get('/generation/', { params }).then(r => r.data),
+  deleteJob: (id: string) => api.delete(`/generation/${id}`).then(r => r.data),
   capabilities: (model?: string) => api.get('/generation/capabilities/model', { params: model ? { model } : {} }).then(r => r.data),
   listModels: () => api.get('/generation/capabilities/models').then(r => r.data),
 }

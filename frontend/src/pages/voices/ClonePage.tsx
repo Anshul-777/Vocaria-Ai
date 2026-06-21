@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Zap, Upload, FileAudio, Plus, Check, AlertTriangle, ChevronDown, RefreshCw, Mic, X, Play, Square, Sparkles, ExternalLink, Download } from 'lucide-react'
+import { Zap, Upload, FileAudio, Plus, Check, AlertTriangle, ChevronDown, RefreshCw, Mic, X, Play, Square, Sparkles, ExternalLink, Download, Trash2 } from 'lucide-react'
 import { voicesApi, cloningApi, qualityApi, agentApi, getErrorMessage } from '@/api/client'
 import { Link } from 'react-router-dom'
 import { Reveal, StaggerGroup, StaggerItem, StatusBadge, WaveBars, PageHeader, Spinner, EmptyState } from '@/components/ui/shared'
@@ -176,6 +176,17 @@ export default function ClonePage() {
     pollRef.current.set(jobId, interval)
   }
 
+  const handleDeleteJob = async (id: string) => {
+    if (!window.confirm('Permanently delete this clone job? Any associated voice profile will also be deleted.')) return;
+    try {
+      await cloningApi.deleteJob(id);
+      setJobs(prev => prev.filter(j => j.id !== id));
+      toast.success('Deleted permanently');
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    }
+  }
+
 
   const selectedV = voices.find(v => v.id === selectedVoice)
 
@@ -319,12 +330,22 @@ export default function ClonePage() {
                 <label className="label">Clone mode</label>
                 <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
                   {[
-                    { id: 'zero_shot', label: 'Zero-shot', desc: 'Fast · Uses reference audio directly' },
-                    { id: 'fine_tune', label: 'Fine-tune', desc: 'Slower · Higher voice similarity · Pro plan' },
+                    { id: 'zero_shot', label: 'Zero-shot', desc: 'Fast · Uses reference audio directly', disabled: false },
+                    { id: 'fine_tune', label: 'Fine-tune', desc: 'In development · High similarity training', disabled: true },
                   ].map(m => (
-                    <button key={m.id} onClick={() => setMode(m.id as any)}
-                      style={{ flex: 1, padding: '12px 14px', borderRadius: 10, border: `1.5px solid ${mode === m.id ? 'var(--blue)' : 'var(--border)'}`, background: mode === m.id ? 'var(--blue-soft)' : 'var(--bg)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.14s' }}>
-                      <div style={{ fontWeight: 600, fontSize: 13.5, color: mode === m.id ? 'var(--blue)' : 'var(--fg-2)', marginBottom: 3 }}>{m.label}</div>
+                    <button key={m.id} onClick={() => !m.disabled && setMode(m.id as any)} disabled={m.disabled}
+                      style={{ 
+                        flex: 1, padding: '12px 14px', borderRadius: 10, 
+                        border: `1.5px solid ${mode === m.id ? 'var(--blue)' : 'var(--border)'}`, 
+                        background: mode === m.id ? 'var(--blue-soft)' : (m.disabled ? 'var(--bg-2)' : 'var(--bg)'), 
+                        cursor: m.disabled ? 'not-allowed' : 'pointer', 
+                        opacity: m.disabled ? 0.6 : 1,
+                        textAlign: 'left', transition: 'all 0.14s' 
+                      }}>
+                      <div style={{ fontWeight: 600, fontSize: 13.5, color: mode === m.id ? 'var(--blue)' : 'var(--fg-2)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {m.label}
+                        {m.disabled && <span style={{ fontSize: 10, fontWeight: 700, background: 'var(--border)', color: 'var(--fg-4)', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Coming Soon</span>}
+                      </div>
                       <div style={{ fontSize: 12, color: 'var(--fg-4)', lineHeight: 1.4 }}>{m.desc}</div>
                     </button>
                   ))}
@@ -424,9 +445,14 @@ export default function ClonePage() {
             <div className="card" style={{ padding: 20 }}>
               <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg)', marginBottom: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 Recent Clone Jobs
-                <button onClick={loadJobs} style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--fg-4)', display: 'flex', borderRadius: 6 }}>
-                  <RefreshCw size={13} />
-                </button>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <button onClick={() => setJobs([])} style={{ padding: '4px 8px', border: 'none', background: 'var(--bg-2)', cursor: 'pointer', color: 'var(--fg-4)', display: 'flex', alignItems: 'center', gap: 4, borderRadius: 6, fontSize: 11, fontWeight: 500, transition: 'all 0.1s' }} className="hover:bg-gray-200">
+                    <X size={12} /> Clear List
+                  </button>
+                  <button onClick={loadJobs} style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--fg-4)', display: 'flex', borderRadius: 6 }}>
+                    <RefreshCw size={13} />
+                  </button>
+                </div>
               </div>
               {jobsLoading ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -437,7 +463,7 @@ export default function ClonePage() {
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {jobs.map(job => (
-                    <CloneJobCard key={job.id} job={job} />
+                    <CloneJobCard key={job.id} job={job} onDelete={() => handleDeleteJob(job.id)} />
                   ))}
                 </div>
               )}
@@ -465,10 +491,10 @@ function StepHeader({ n, title, done, active }: { n: number; title: string; done
   )
 }
 
-function CloneJobCard({ job }: { job: any }) {
+function CloneJobCard({ job, onDelete }: { job: any; onDelete?: () => void }) {
   const isFailed = job.status === 'failed'
   return (
-    <div style={{ padding: '11px 14px', borderRadius: 10, border: isFailed ? '1px solid rgba(220,38,38,0.3)' : '1px solid var(--border-2)', background: isFailed ? 'rgba(220,38,38,0.03)' : 'var(--bg-2)' }}>
+    <div style={{ padding: '11px 14px', borderRadius: 10, border: isFailed ? '1px solid rgba(220,38,38,0.3)' : '1px solid var(--border-2)', background: isFailed ? 'rgba(220,38,38,0.03)' : 'var(--bg-2)', position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <StatusBadge status={job.status} />
@@ -478,6 +504,11 @@ function CloneJobCard({ job }: { job: any }) {
           <span>{job.mode}</span>
           <span>·</span>
           <span>{new Date(job.created_at).toLocaleDateString()}</span>
+          {onDelete && (
+            <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, display: 'flex', alignItems: 'center', marginLeft: 4, color: 'var(--red)', opacity: 0.5, transition: 'opacity 0.2s' }} onMouseEnter={e => e.currentTarget.style.opacity = '1'} onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}>
+              <Trash2 size={13} />
+            </button>
+          )}
         </div>
       </div>
       <div style={{ marginBottom: 10 }}>

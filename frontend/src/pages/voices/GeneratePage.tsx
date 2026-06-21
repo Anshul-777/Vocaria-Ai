@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
-import { Wand2, Save, Play, Download, RefreshCw, Zap, Clock, UserCircle, Mic2, Globe, Volume2, Sparkles, Cpu, HelpCircle, Star, Activity } from 'lucide-react'
+import { Wand2, Save, Play, Download, RefreshCw, Zap, Clock, UserCircle, Mic2, Globe, Volume2, Sparkles, Cpu, HelpCircle, Star, Activity, Trash2, X } from 'lucide-react'
 import { voicesApi, generationApi, getErrorMessage, agentApi } from '@/api/client'
 import { Reveal } from '@/hooks/motionVariants'
 import WaveformVisualizer from '@/components/audio/WaveformVisualizer'
@@ -115,7 +115,7 @@ export default function GeneratePage() {
   const fetchRecent = async () => {
     try {
       const data = await generationApi.list({ limit: 5 })
-      const items = data.items || data || []
+      const items = data.jobs || data.items || data || []
       setRecentJobs(Array.isArray(items) ? items : [])
 
       const active = (Array.isArray(items) ? items : []).find((j: any) => j.status === 'pending' || j.status === 'processing')
@@ -141,6 +141,19 @@ export default function GeneratePage() {
         }).catch(() => {})
       }
     } catch (e) { }
+  }
+
+  const handleDeleteJob = async (id: string) => {
+    if (!window.confirm('Permanently delete this generation job?')) return;
+    try {
+      await generationApi.deleteJob(id);
+      setRecentJobs(prev => prev.filter(j => j.id !== id));
+      if (jobId === id) setJobId(null);
+      if (result?.id === id) setResult(null);
+      toast.success('Deleted permanently');
+    } catch (err) {
+      toast.error(getErrorMessage(err));
+    }
   }
 
   useEffect(() => {
@@ -836,18 +849,30 @@ export default function GeneratePage() {
       {recentJobs.length > 0 && (
         <Reveal delay={0.1}>
           <div className="card" style={{ padding: 24, marginTop: 32 }}>
-            <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0a0f1e', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Activity size={16} style={{ color: '#6366f1' }} />
-              Recent Generations
-            </h3>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid #e2e8f0', color: '#64748b' }}>
-                    <th style={{ padding: '12px 8px', fontWeight: 600 }}>Model</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600 }}>Text</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600 }}>Status</th>
-                    <th style={{ padding: '12px 8px', fontWeight: 600 }}>Result</th>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, color: '#0a0f1e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Activity size={16} style={{ color: '#6366f1' }} />
+                Recent Generations
+              </h3>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setRecentJobs([])} className="hover:bg-gray-200" style={{ padding: '4px 8px', border: 'none', background: 'var(--bg-2)', cursor: 'pointer', color: 'var(--fg-4)', display: 'flex', alignItems: 'center', gap: 4, borderRadius: 6, fontSize: 11, fontWeight: 500, transition: 'all 0.1s' }}>
+                  <X size={12} /> Clear List
+                </button>
+                <button onClick={fetchRecent} style={{ padding: 5, border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--fg-4)', display: 'flex', borderRadius: 6 }}>
+                  <RefreshCw size={13} />
+                </button>
+              </div>
+            </div>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 380, paddingRight: 4 }} className="scrollbar-hide">
+              <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0, fontSize: 13, textAlign: 'left' }}>
+                <thead style={{ position: 'sticky', top: 0, backgroundColor: 'white', zIndex: 10 }}>
+                  <tr style={{ color: '#64748b' }}>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Model</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Profile</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Description</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Status</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, borderBottom: '1px solid #e2e8f0' }}>Result</th>
+                    <th style={{ padding: '12px 8px', fontWeight: 600, borderBottom: '1px solid #e2e8f0', width: 40 }}></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -859,8 +884,15 @@ export default function GeneratePage() {
                           {job.model === 'chatterbox-turbo' ? 'Chatterbox' : job.model === 'parler-tts' ? 'Parler-TTS' : 'Kokoro 82M'}
                         </div>
                       </td>
+                      <td style={{ padding: '12px 8px', color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <div style={{ fontWeight: 600, color: job.voice_profile_id ? '#334155' : '#94a3b8' }}>
+                          {job.voice_profile_id ? voices.find(v => v.id === job.voice_profile_id)?.name || 'Unknown Profile' : 'Not saved'}
+                        </div>
+                      </td>
                       <td style={{ padding: '12px 8px', color: '#64748b', maxWidth: 200, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {job.text || '...'}
+                        <div style={{ fontSize: 13, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={job.speaking_style || 'No description provided'}>
+                          {job.speaking_style || 'No description provided'}
+                        </div>
                       </td>
                       <td style={{ padding: '12px 8px' }}>
                         <span style={{
@@ -870,6 +902,9 @@ export default function GeneratePage() {
                         }}>
                           {job.status === 'processing' ? 'Processing...' : job.status === 'pending' ? 'Queued' : job.status === 'completed' ? 'Success' : 'Failed'}
                         </span>
+                        <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+                          {new Date(job.created_at).toLocaleString()}
+                        </div>
                       </td>
                       <td style={{ padding: '12px 8px' }}>
                         {job.status === 'completed' && job.output_url ? (
@@ -884,6 +919,15 @@ export default function GeneratePage() {
                         ) : (
                           <RefreshCw size={14} className="animate-spin text-gray-400" />
                         )}
+                      </td>
+                      <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                        <button 
+                          onClick={() => handleDeleteJob(job.id)} 
+                          className="p-1.5 text-danger-500 opacity-50 hover:opacity-100 transition-opacity rounded-md hover:bg-danger-50 flex items-center justify-center w-8 h-8"
+                          title="Delete generation"
+                        >
+                          <Trash2 size={15} />
+                        </button>
                       </td>
                     </tr>
                   ))}

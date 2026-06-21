@@ -91,7 +91,8 @@ async def generate_speech(
     # Use background tasks locally to avoid Celery/Redis dependency
     try:
         from app.workers.generation_tasks import _run_gen_async
-        background_tasks.add_task(_run_gen_async, None, job.id, current_user.id)
+        import asyncio
+        asyncio.create_task(_run_gen_async(None, job.id, current_user.id))
         import uuid
         job.celery_task_id = f"local-{uuid.uuid4()}"
         await db.commit()
@@ -383,6 +384,7 @@ async def list_generation_jobs(
         "text": j.text[:50] + ("..." if len(j.text) > 50 else ""),
         "model": (j.extra_metadata or {}).get("model", "kokoro-82m"),
         "emotion": j.emotion, "voice_profile_id": j.voice_profile_id,
+        "speaking_style": j.speaking_style,
         "character_count": j.character_count, "duration_seconds": j.duration_seconds,
         "output_format": j.output_format, "created_at": j.created_at,
     } for j in jobs]}
@@ -435,3 +437,14 @@ async def list_available_models():
             },
         ]
     }
+
+
+@router.delete("/{job_id}")
+async def delete_generation_job(job_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(GenerationJob).where(GenerationJob.id == job_id, GenerationJob.user_id == current_user.id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    await db.delete(job)
+    await db.commit()
+    return {"status": "deleted"}

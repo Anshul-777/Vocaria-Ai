@@ -2,10 +2,13 @@ import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Activity, Square, Mic, MicOff, AlertTriangle, CheckCircle, Clock, Wifi, WifiOff, HelpCircle, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { Reveal, WaveBars, VerdictBadge, StatusBadge } from '@/components/ui/shared'
+import { RecentDetections } from '@/components/ui/index'
 import { useAuthStore } from '@/store/authStore'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { clsx } from 'clsx'
 import toast from 'react-hot-toast'
+import { supabase } from '@/lib/supabase'
+import { useNavigate } from 'react-router-dom'
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000'
 
@@ -16,6 +19,12 @@ interface ChunkResult {
   verdict: string
   is_suspicious: boolean
   model_scores: Record<string, number>
+  speakers: {
+    id: string
+    probabilities: { ai_generated: number, real: number }
+    is_suspicious: boolean
+    duration_sec: number
+  }[]
   flagged_reasons: string[]
   latency_ms: number
   session_stats: {
@@ -74,6 +83,7 @@ export default function LiveDetection() {
   const { accessToken } = useAuthStore()
   const [running, setRunning]         = useState(false)
   const [connected, setConnected]     = useState(false)
+  const [countdown, setCountdown]     = useState<number | null>(null)
   const [error, setError]             = useState<string | null>(null)
   const [latest, setLatest]           = useState<ChunkResult | null>(null)
   const [timeline, setTimeline]       = useState<{ t: number; score: number }[]>([])
@@ -81,12 +91,18 @@ export default function LiveDetection() {
   const [feedbackGiven, setFeedbackGiven] = useState(false)
   const [micAllowed, setMicAllowed]   = useState(true)
   const [threshold]                   = useState(0.65)
+  const [detectedSpeakers, setDetectedSpeakers] = useState<Record<string, { id: string, probabilities: { ai_generated: number, real: number }, is_suspicious: boolean, duration_sec: number }>>({})
+  
+  const navigate = useNavigate()
+
+  const [connecting, setConnecting]   = useState(false)
 
   const wsRef       = useRef<WebSocket | null>(null)
   const mediaRef    = useRef<MediaStream | null>(null)
   const processorRef= useRef<ScriptProcessorNode | null>(null)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const chunkRef    = useRef<number>(0)
+  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const encodeFloat32ToWav = (samples: Float32Array, sampleRate: number): ArrayBuffer => {
     const buf = new ArrayBuffer(44 + samples.length * 2)
@@ -105,9 +121,15 @@ export default function LiveDetection() {
     return buf
   }
 
+
   const startSession = useCallback(async () => {
-    setError(null); setTimeline([]); setLatest(null); setVerdict('–'); setFeedbackGiven(false)
+    // Force cleanup any dangling state
+    if (mediaRef.current) mediaRef.current.getTracks().forEach(t => t.stop())
+    if (wsRef.current) wsRef.current.close()
+    
+    setError(null); setTimeline([]); setLatest(null); setVerdict('–'); setFeedbackGiven(false); setDetectedSpeakers({})
     chunkRef.current = 0
+    setConnecting(true)
 
     // Mic permission
     let stream: MediaStream
@@ -117,26 +139,38 @@ export default function LiveDetection() {
       setMicAllowed(true)
     } catch (err) {
       setMicAllowed(false)
+      setConnecting(false)
       const errMessage = err instanceof Error ? err.message : String(err)
       setError(`Microphone access failed: ${errMessage}. Make sure you are on localhost or HTTPS.`)
       return
     }
 
     // WebSocket
-    const ws = new WebSocket(`${WS_URL}/ws/detect/stream?token=${accessToken}&session_id=live-${Date.now()}&confidence_threshold=${threshold}`)
+    let currentToken = accessToken
+    if (!currentToken) {
+      const { data: { session } } = await supabase.auth.getSession()
+      currentToken = session?.access_token || null
+    }
+
+    const ws = new WebSocket(`${WS_URL}/ws/detect/stream?token=${currentToken}&session_id=live-${Date.now()}&confidence_threshold=${threshold}`)
     wsRef.current = ws
 
-    ws.onopen = () => { setConnected(true); setRunning(true) }
+    ws.onopen = () => { setConnected(true); setRunning(true); setConnecting(false) }
     ws.onclose = (e) => { 
       setConnected(false)
       setRunning(false)
-      if (e.code !== 1000 && e.code !== 1005 && e.code !== 4001) {
+      setConnecting(false)
+      processorRef.current?.disconnect()
+      audioCtxRef.current?.close()
+      mediaRef.current?.getTracks().forEach(t => t.stop())
+      if (e.code !== 1000 && e.code !== 1005) {
         setError(`Connection closed unexpectedly (code: ${e.code}). The backend server might have crashed or rejected the connection.`)
-      } else if (e.code === 4001) {
-        setError('Connection rejected: Unauthorized. Please log in again.')
       }
     }
-    ws.onerror = () => setError('WebSocket connection failed. Check your server is running.')
+    ws.onerror = () => {
+      setConnecting(false)
+      setError('WebSocket connection failed. Check your server is running.')
+    }
 
     ws.onmessage = (ev) => {
       try {
@@ -147,6 +181,26 @@ export default function LiveDetection() {
           setLatest(msg)
           setTimeline(prev => [...prev.slice(-120), { t: chunkRef.current, score: msg.ensemble_score }])
           if (msg.session_stats?.session_verdict) setVerdict(msg.session_stats.session_verdict)
+          
+          if (msg.speakers && msg.speakers.length > 0) {
+            setDetectedSpeakers(prev => {
+              const next = { ...prev }
+              msg.speakers.forEach((spk: any) => {
+                if (!next[spk.id]) next[spk.id] = { ...spk }
+                else {
+                  next[spk.id].duration_sec += spk.duration_sec
+                  next[spk.id].probabilities = spk.probabilities
+                  if (spk.is_suspicious) next[spk.id].is_suspicious = true
+                }
+              })
+              return next
+            })
+          }
+        } else if (msg.type === 'session_summary') {
+          if (msg.job_id) {
+            toast.success("Live session saved successfully!")
+            navigate(`/detection/${msg.job_id}`)
+          }
         }
       } catch {}
     }
@@ -170,17 +224,35 @@ export default function LiveDetection() {
   }, [accessToken, threshold])
 
   const stopSession = useCallback(() => {
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
+    setCountdown(null)
+    setConnecting(false)
     processorRef.current?.disconnect()
-    audioCtxRef.current?.close()
+    if (audioCtxRef.current && audioCtxRef.current.state !== 'closed') audioCtxRef.current.close().catch(()=>{})
     mediaRef.current?.getTracks().forEach(t => t.stop())
     if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'end_stream' }))
-      wsRef.current.close()
+      try { wsRef.current.send(JSON.stringify({ type: 'end_stream' })) } catch(e){}
+      wsRef.current.close(1000, 'User ended session')
     }
     setRunning(false); setConnected(false)
   }, [])
 
-  useEffect(() => () => { stopSession() }, [])
+  useEffect(() => () => { stopSession() }, [stopSession])
+
+  const startWithCountdown = useCallback(() => {
+    setCountdown(3)
+    let count = 3
+    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
+    countdownTimerRef.current = setInterval(() => {
+      count--
+      if (count > 0) setCountdown(count)
+      else {
+        if (countdownTimerRef.current) clearInterval(countdownTimerRef.current)
+        setCountdown(null)
+        startSession()
+      }
+    }, 1000)
+  }, [startSession])
 
   const verdictColor = sessionVerdict === 'synthetic' ? '#dc2626' : sessionVerdict === 'suspicious' ? '#d97706' : sessionVerdict === 'authentic' ? '#16a34a' : 'var(--fg-4)'
   const stats = latest?.session_stats
@@ -198,36 +270,20 @@ export default function LiveDetection() {
               <button onClick={stopSession} className="btn-danger flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-700 transition-colors shadow-sm">
                 <Square size={16} fill="white" /> Stop Session
               </button>
+            ) : countdown !== null ? (
+              <button onClick={stopSession} className="btn-secondary flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-700 shadow-sm border border-surface-200">
+                <Square size={14} fill="currentColor" /> Starting in {countdown}...
+              </button>
+            ) : connecting ? (
+              <button onClick={stopSession} className="btn-secondary flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-700 shadow-sm border border-surface-200">
+                <div className="w-4 h-4 border-2 border-surface-400 border-t-surface-600 rounded-full animate-spin" /> Connecting...
+              </button>
             ) : (
-              <button onClick={startSession} className="btn-primary flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-700 transition-colors shadow-sm">
+              <button onClick={startWithCountdown} className="btn-primary flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-700 transition-colors shadow-sm">
                 <Mic size={16} /> Start Live Detection
               </button>
             )}
           </div>
-        </div>
-      </Reveal>
-
-      {/* Connection status */}
-      <Reveal delay={0.04}>
-        <div className="flex items-center gap-3 px-4 py-3 bg-surface-50 rounded-xl border border-surface-200">
-          {running ? <Wifi size={18} className="text-success-500" /> : <WifiOff size={18} className="text-surface-400" />}
-          <div className="flex items-center gap-2 flex-1">
-            <span className={clsx("text-sm font-600", running ? 'text-success-600' : 'text-surface-500')}>
-              {running ? 'Streaming & analyzing…' : 'Stopped'}
-            </span>
-            {running && stats && (
-              <span className="text-xs text-surface-400 ml-2 font-500">
-                {stats.total_chunks} chunks · {stats.elapsed_seconds.toFixed(0)}s · avg {(stats.avg_score * 100).toFixed(1)}% risk
-              </span>
-            )}
-          </div>
-          {running && (
-            <div className="flex items-center gap-1.5">
-              <motion.div className="w-2 h-2 rounded-full bg-success-500"
-                animate={{ opacity: [1, 0.3, 1] }} transition={{ duration: 1.2, repeat: Infinity }} />
-              <span className="text-[11px] text-success-600 font-800 tracking-wider">LIVE</span>
-            </div>
-          )}
         </div>
       </Reveal>
 
@@ -237,12 +293,9 @@ export default function LiveDetection() {
         </div>
       )}
 
-
-
       <div className="grid lg:grid-cols-5 gap-6 items-start">
         {/* Left: Timeline + waveform */}
         <div className="lg:col-span-3 flex flex-col gap-6">
-          {/* Live waveform indicator */}
           <Reveal>
             <div className="card p-6 rounded-2xl">
               <div className="flex items-center justify-between mb-5">
@@ -258,7 +311,6 @@ export default function LiveDetection() {
                   </div>
                 )}
               </div>
-              {/* Confidence timeline chart */}
               <div style={{ height: 180 }}>
                 {timeline.length > 1 ? (
                   <ResponsiveContainer width="100%" height="100%">
@@ -289,14 +341,15 @@ export default function LiveDetection() {
             </div>
           </Reveal>
 
-          {/* Model scores */}
           <Reveal delay={0.05}>
             <div className="card p-6 rounded-2xl">
               <div className="font-700 text-sm text-surface-900 mb-5">Per-Model Scores (last chunk)</div>
               <div className="flex flex-col gap-3">
-                {['aasist','rawnet2','prosodic','spectral','glottal'].map(m => (
-                  <ModelBar key={m} name={m} score={latest?.model_scores?.[m]} />
-                ))}
+                {latest?.model_scores ? Object.entries(latest.model_scores).map(([m, s]) => (
+                  <ModelBar key={m} name={m} score={s as number} />
+                )) : (
+                  <div className="text-sm text-surface-400">Waiting for data...</div>
+                )}
               </div>
               {latest?.flagged_reasons?.length > 0 && (
                 <div className="mt-5 pt-5 border-t border-surface-100">
@@ -310,6 +363,37 @@ export default function LiveDetection() {
               )}
             </div>
           </Reveal>
+
+          {Object.keys(detectedSpeakers).length > 0 && (
+            <Reveal delay={0.06}>
+              <div className="card p-6 rounded-2xl">
+                <div className="font-700 text-sm text-surface-900 mb-4">Detected Speakers</div>
+                <div className="flex flex-col gap-3">
+                  {Object.values(detectedSpeakers).map((spk, idx) => {
+                    const aiScore = spk.probabilities?.ai_generated || 0;
+                    const color = aiScore >= 0.65 ? 'text-danger-600' : 'text-success-600';
+                    const badgeClass = aiScore >= 0.65 ? 'bg-danger-100 text-danger-700' : 'bg-success-100 text-success-700';
+                    return (
+                      <div key={idx} className="flex items-center justify-between p-3 bg-surface-50 rounded-xl border border-surface-200">
+                        <div>
+                          <div className="font-600 text-sm text-surface-800">{spk.id}</div>
+                          <div className="text-xs text-surface-500 mt-0.5">Active: {spk.duration_sec.toFixed(1)}s</div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className={`text-[10px] font-700 px-2 py-1 uppercase rounded-md ${badgeClass}`}>
+                            {aiScore >= 0.65 ? 'Synthetic' : 'Authentic'}
+                          </span>
+                          <div className={`font-700 text-sm ${color}`}>
+                            {(aiScore * 100).toFixed(0)}% Risk
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </Reveal>
+          )}
         </div>
 
         {/* Right: Session verdict & stats */}
@@ -345,40 +429,41 @@ export default function LiveDetection() {
                   <div key={row.label} className="flex justify-between items-center">
                     <span className="text-sm text-surface-500 font-500">{row.label}</span>
                     <span className="text-sm font-600 text-surface-800">{row.value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Reveal>
+
+          {!running && stats && stats.total_chunks > 0 && (
+            <Reveal delay={0.1}>
+              <div className="card p-6 rounded-2xl">
+                <div className="font-700 text-sm text-surface-900 mb-4">Session Feedback</div>
+                {!feedbackGiven ? (
+                  <div>
+                    <p className="text-xs text-surface-500 mb-4">Was this live detection session accurate overall?</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setFeedbackGiven(true); toast.success('Feedback recorded. Thank you!') }} className="flex-1 flex items-center justify-center gap-2 py-2 border border-surface-200 rounded-lg text-sm font-600 text-surface-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all cursor-pointer">
+                        <ThumbsUp size={14} /> Accurate
+                      </button>
+                      <button onClick={() => { setFeedbackGiven(true); toast.success('Feedback recorded. Thank you!') }} className="flex-1 flex items-center justify-center gap-2 py-2 border border-surface-200 rounded-lg text-sm font-600 text-surface-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition-all cursor-pointer">
+                        <ThumbsDown size={14} /> Inaccurate
+                      </button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-3 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-600">
+                    <CheckCircle size={16} />
+                    Thank you for your feedback!
+                  </div>
+                )}
               </div>
             </Reveal>
-
-            {/* Feedback block - only show when stopped and we have stats */}
-            {!running && stats && stats.total_chunks > 0 && (
-              <Reveal delay={0.1}>
-                <div className="card p-6 rounded-2xl">
-                  <div className="font-700 text-sm text-surface-900 mb-4">Session Feedback</div>
-                  {!feedbackGiven ? (
-                    <div>
-                      <p className="text-xs text-surface-500 mb-4">Was this live detection session accurate overall?</p>
-                      <div className="flex gap-2">
-                        <button onClick={() => { setFeedbackGiven(true); toast.success('Feedback recorded. Thank you!') }} className="flex-1 flex items-center justify-center gap-2 py-2 border border-surface-200 rounded-lg text-sm font-600 text-surface-700 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all cursor-pointer">
-                          <ThumbsUp size={14} /> Accurate
-                        </button>
-                        <button onClick={() => { setFeedbackGiven(true); toast.success('Feedback recorded. Thank you!') }} className="flex-1 flex items-center justify-center gap-2 py-2 border border-surface-200 rounded-lg text-sm font-600 text-surface-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 transition-all cursor-pointer">
-                          <ThumbsDown size={14} /> Inaccurate
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 p-3 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-600">
-                      <CheckCircle size={16} />
-                      Thank you for your feedback!
-                    </div>
-                  )}
-                </div>
-              </Reveal>
-            )}
-          </div>
+          )}
         </div>
+      </div>
+
+      <RecentDetections mode="stream" />
     </div>
   )
 }

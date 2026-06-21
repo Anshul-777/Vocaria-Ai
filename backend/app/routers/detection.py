@@ -204,6 +204,7 @@ async def list_detection_jobs(
     page_size: int = Query(default=20, ge=1, le=100),
     status_filter: Optional[str] = Query(default=None),
     verdict_filter: Optional[str] = Query(default=None),
+    mode_filter: Optional[str] = Query(default=None, alias="mode"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -214,6 +215,8 @@ async def list_detection_jobs(
         query = query.where(DetectionJob.status == status_filter)
     if verdict_filter:
         query = query.where(DetectionJob.verdict == verdict_filter)
+    if mode_filter:
+        query = query.where(DetectionJob.mode == mode_filter)
 
     query = query.order_by(desc(DetectionJob.created_at))
 
@@ -516,3 +519,24 @@ async def get_detection_stats(
         },
         "model_performance": model_performance
     }
+
+
+@router.patch("/{job_id}/notes")
+async def update_detection_notes(job_id: str, notes: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(DetectionJob).where(DetectionJob.id == job_id, DetectionJob.user_id == current_user.id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job.analyst_notes = notes
+    await db.commit()
+    return {"status": "success"}
+
+@router.post("/{job_id}/feedback")
+async def submit_detection_feedback(job_id: str, is_accurate: bool, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(DetectionJob).where(DetectionJob.id == job_id, DetectionJob.user_id == current_user.id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    job.user_feedback = is_accurate
+    await db.commit()
+    return {"status": "success"}

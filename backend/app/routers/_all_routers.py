@@ -76,8 +76,8 @@ async def start_clone_job(
 
     # Dispatch background task without relying on Celery/Redis
     from app.workers.cloning_tasks import _run_clone_async
-    # fallback local execution
-    background_tasks.add_task(_run_clone_async, None, job.id, current_user.id, body.voice_profile_id, body.mode, body.fine_tune_steps)
+    import asyncio
+    asyncio.create_task(_run_clone_async(None, job.id, current_user.id, body.voice_profile_id, body.mode, body.fine_tune_steps))
     job.celery_task_id = f"local-{uuid.uuid4()}"
     await db.commit()
 
@@ -121,7 +121,25 @@ async def list_clone_jobs(
         "is_public": getattr(j, "is_public", False),
         "created_at": j.created_at, "completed_at": j.completed_at
     } for j, p_name in result.all()]}
-
+@cloning_router.delete("/{job_id}")
+async def delete_clone_job(job_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(CloneJob).where(CloneJob.id == job_id, CloneJob.user_id == current_user.id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(404, "Clone job not found")
+    
+    if job.voice_profile_id:
+        vp_result = await db.execute(select(VoiceProfile).where(VoiceProfile.id == job.voice_profile_id, VoiceProfile.owner_id == current_user.id))
+        vp = vp_result.scalar_one_or_none()
+        if vp:
+            vp.embedding_path = None
+            vp.preview_url = None
+            if hasattr(vp, 'training_status'):
+                vp.training_status = "pending"
+            
+    await db.delete(job)
+    await db.commit()
+    return {"message": "Clone job deleted successfully"}
 
 @cloning_router.post("/upload-sample/{voice_profile_id}")
 async def upload_voice_sample(
@@ -180,7 +198,8 @@ async def upload_voice_sample(
     from app.workers.quality_tasks import _analyze
     await db.commit()
     await db.refresh(sample)
-    background_tasks.add_task(_analyze, sample.id, storage_key)
+    import asyncio
+    asyncio.create_task(_analyze(sample.id, storage_key))
 
     return {
         "sample_id": sample.id, "duration_seconds": duration,
@@ -291,7 +310,21 @@ async def list_generation_jobs(
         "emotion": j.emotion, "voice_profile_id": j.voice_profile_id,
         "character_count": j.character_count, "duration_seconds": j.duration_seconds,
         "output_format": j.output_format, "created_at": j.created_at,
+        "model": j.extra_metadata.get("model") if j.extra_metadata else None, "text": j.text, "speaking_style": j.speaking_style,
+        "output_url": None, "error_message": j.error_message
     } for j in jobs]}
+
+
+@generation_router.delete("/{job_id}")
+async def delete_generation_job(job_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(GenerationJob).where(GenerationJob.id == job_id, GenerationJob.user_id == current_user.id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(404, "Generation job not found")
+        
+    await db.delete(job)
+    await db.commit()
+    return {"status": "deleted"}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -530,7 +563,12 @@ async def list_plans():
 async def get_current_plan(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     usage = await get_usage_summary(current_user, db)
     plan_info = PLAN_DETAILS.get(current_user.plan_tier, PLAN_DETAILS["free"])
-    return {"tier": current_user.plan_tier, "plan": plan_info, **usage}
+    
+    sub_res = await db.execute(select(Subscription).where(Subscription.user_id == current_user.id, Subscription.status == "active").order_by(desc(Subscription.created_at)))
+    sub = sub_res.scalars().first()
+    cycle = sub.billing_cycle if sub else "monthly"
+
+    return {"tier": current_user.plan_tier, "cycle": cycle, "plan": plan_info, **usage}
 
 
 @plans_router.post("/upgrade")
@@ -557,9 +595,10 @@ async def upgrade_plan(
     # For free tier or when no gateway is configured - apply immediately
     old_tier = current_user.plan_tier
     current_user.plan_tier = plan_tier
+    old_tier_str = old_tier.value if hasattr(old_tier, 'value') else str(old_tier)
     db.add(Subscription(user_id=current_user.id, plan_tier=plan_tier, billing_cycle=billing_cycle, status="active"))
     db.add(AuditLog(user_id=current_user.id, action=AuditAction.PLAN_CHANGE,
-                    details={"from": old_tier, "to": tier, "billing_cycle": billing_cycle}))
+                    details={"from": old_tier_str, "to": tier, "billing_cycle": billing_cycle}))
     db.add(Notification(user_id=current_user.id, type=NotificationType.PLAN_CHANGED,
                         title=f"Plan changed to {PLAN_DETAILS[tier]['name']}",
                         message=f"Your plan has been updated to {PLAN_DETAILS[tier]['name']}."))

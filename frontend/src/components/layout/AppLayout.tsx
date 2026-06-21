@@ -98,6 +98,13 @@ export default function AppLayout() {
   const SidebarInner = ({ isMobile = false }: { isMobile?: boolean }) => {
     const isCollapsed = !isMobile && collapsed;
 
+    // Find the most specific active path
+    const activePath = NAV_SECTIONS
+      .flatMap(s => s.items)
+      .map(i => i.path)
+      .filter(p => location.pathname === p || location.pathname.startsWith(p + '/'))
+      .sort((a, b) => b.length - a.length)[0];
+
     return (
       <div className="flex h-full flex-col overflow-hidden py-4">
         <nav className="flex-1 overflow-y-auto px-3 space-y-6 scrollbar-hide">
@@ -113,7 +120,7 @@ export default function AppLayout() {
               <div className="space-y-1">
                 {section.items.map((item: any, idx: number) => {
                   const Icon = item.icon
-                  const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path))
+                  const isActive = item.path === activePath;
 
                   return (
                     <motion.div

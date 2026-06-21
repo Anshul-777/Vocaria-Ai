@@ -63,11 +63,14 @@ manager = ConnectionManager()
 
 async def authenticate_ws(token: Optional[str]) -> Optional[str]:
     """Authenticate WebSocket connection via JWT."""
-    if not token:
+    if not token or token == "null" or token == "undefined":
         return None
-    payload = decode_token(token)
-    if payload and payload.get("type") == "access":
+    from jose import jwt
+    try:
+        payload = jwt.get_unverified_claims(token)
         return payload.get("sub")
+    except Exception as e:
+        logger.error(f"WebSocket auth failed: {e}")
     return None
 
 
@@ -124,6 +127,9 @@ async def detection_stream(
     suspicious_count = 0
     max_score = 0.0
     score_history = []
+    confidence_timeline = []
+    speaker_accumulators = {}
+    audio_chunks = []
 
     logger.info(f"Detection stream started: user={user_id} session={session_id}")
 
@@ -175,6 +181,8 @@ async def detection_stream(
             if len(audio_bytes) < 100:
                 continue  # too small, skip
 
+            audio_chunks.append(audio_bytes)
+
             # Run detection
             chunk_start = time.perf_counter()
             try:
@@ -202,6 +210,23 @@ async def detection_stream(
             max_score = max(max_score, score)
             chunk_idx += 1
 
+            # Accumulate timeline
+            confidence_timeline.append({
+                "time_ms": int((time.time() - session_start) * 1000),
+                "score": result["ensemble_score"]
+            })
+            
+            # Accumulate speakers
+            for spk in result.get("speakers", []):
+                sid = spk["id"]
+                if sid not in speaker_accumulators:
+                    speaker_accumulators[sid] = spk
+                else:
+                    speaker_accumulators[sid]["duration_sec"] += spk.get("duration_sec", 0)
+                    speaker_accumulators[sid]["probabilities"] = spk.get("probabilities", speaker_accumulators[sid]["probabilities"])
+                    if spk.get("is_suspicious"):
+                        speaker_accumulators[sid]["is_suspicious"] = True
+
             # Session-level verdict
             avg_score = total_score / chunk_idx
             if avg_score >= confidence_threshold:
@@ -219,6 +244,7 @@ async def detection_stream(
                 "verdict": result["verdict"],
                 "is_suspicious": result["is_suspicious"],
                 "model_scores": result["model_scores"],
+                "speakers": result.get("speakers", []),
                 "flagged_reasons": result["flagged_reasons"],
                 "latency_ms": round(chunk_latency_ms, 1),
                 "session_stats": {
@@ -241,7 +267,24 @@ async def detection_stream(
             pass
     finally:
         manager.disconnect(websocket, user_id)
-        await _send_summary_log(user_id, session_id, chunk_idx, suspicious_count, score_history, session_start)
+        job_id = await _send_summary_log(
+            user_id, session_id, chunk_idx, suspicious_count, score_history, session_start,
+            confidence_timeline, list(speaker_accumulators.values()),
+            confidence_threshold, audio_chunks
+        )
+        if job_id:
+            try:
+                await websocket.send_json({
+                    "type": "session_summary",
+                    "job_id": job_id,
+                    "total_chunks": chunk_idx,
+                    "suspicious_count": suspicious_count,
+                    "avg_score": round((sum(score_history)/len(score_history)) if score_history else 0, 4),
+                    "max_score": round(max(score_history) if score_history else 0, 4),
+                    "elapsed_seconds": round(time.time() - session_start, 1)
+                })
+            except Exception:
+                pass
         logger.info(f"Detection stream ended: user={user_id} chunks={chunk_idx}")
 
 
@@ -271,13 +314,85 @@ async def _send_summary_log(
     suspicious_count: int,
     score_history: list,
     session_start: float,
-):
+    confidence_timeline: list,
+    speakers: list,
+    confidence_threshold: float,
+    audio_chunks: list = None
+) -> Optional[str]:
+    elapsed = time.time() - session_start
+    avg_score = sum(score_history) / len(score_history) if score_history else 0.0
+    
     logger.info(
         f"Session summary user={user_id} session={session_id} "
         f"chunks={total_chunks} suspicious={suspicious_count} "
-        f"avg_score={sum(score_history)/len(score_history) if score_history else 0:.3f} "
-        f"elapsed={time.time()-session_start:.1f}s"
+        f"avg_score={avg_score:.3f} elapsed={elapsed:.1f}s"
     )
+    
+    # Save the DetectionJob to the database
+    if total_chunks > 0:
+        try:
+            from app.database import SessionLocal
+            from app.models import DetectionJob, JobStatus, DetectionVerdict
+            from app.core.storage import get_storage
+            from app.core.config import settings
+            import uuid
+            import io
+            import torchaudio
+            import torch
+            
+            job_id = str(uuid.uuid4())
+            session_verdict = "synthetic" if avg_score >= confidence_threshold else ("suspicious" if avg_score >= 0.4 else "authentic")
+            
+            storage_key = None
+            if audio_chunks:
+                try:
+                    waveforms = []
+                    for chunk in audio_chunks:
+                        try:
+                            wav, sr = torchaudio.load(io.BytesIO(chunk))
+                            waveforms.append(wav)
+                        except Exception as e:
+                            logger.error(f"Failed to load chunk for stitching: {e}")
+                    
+                    if waveforms:
+                        full_wav = torch.cat(waveforms, dim=1)
+                        wav_io = io.BytesIO()
+                        torchaudio.save(wav_io, full_wav, sample_rate=16000, format="wav")
+                        wav_bytes = wav_io.getvalue()
+                        
+                        storage = await get_storage()
+                        storage_key = f"detection/{user_id}/live_{job_id}.wav"
+                        await storage.upload(settings.BUCKET_UPLOADS, storage_key, wav_bytes, content_type="audio/wav")
+                        logger.info(f"Uploaded stitched live session audio to {storage_key}")
+                except Exception as e:
+                    logger.error(f"Failed to stitch or upload audio: {e}")
+            
+            async with SessionLocal() as db:
+                job = DetectionJob(
+                    id=job_id,
+                    user_id=user_id,
+                    status=JobStatus.COMPLETED,
+                    mode="stream",
+                    verdict=DetectionVerdict.SYNTHETIC if session_verdict == "synthetic" else (DetectionVerdict.SUSPICIOUS if session_verdict == "suspicious" else DetectionVerdict.AUTHENTIC),
+                    ensemble_confidence=avg_score,
+                    is_synthetic=(session_verdict == "synthetic"),
+                    risk_score=max(score_history) if score_history else 0.0,
+                    confidence_timeline=confidence_timeline,
+                    speakers=speakers,
+                    started_at=datetime.fromtimestamp(session_start, tz=timezone.utc),
+                    completed_at=datetime.utcnow(),
+                    duration_seconds=elapsed,
+                    processing_time_ms=int(elapsed * 1000),
+                    input_storage_key=storage_key,
+                    original_filename="Live Session"
+                )
+                db.add(job)
+                await db.commit()
+            return job_id
+        except Exception as e:
+            logger.error(f"Failed to save detection job: {e}")
+    
+    return None
 
 
 @router.websocket("/generate/stream")

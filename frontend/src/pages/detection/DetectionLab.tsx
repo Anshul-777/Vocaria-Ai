@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useDropzone } from 'react-dropzone'
-import { Shield, Upload, FileAudio, X, Sliders, ChevronDown, Activity, Mic, Square } from 'lucide-react'
+import { Shield, Upload, FileAudio, X, Sliders, ChevronDown, Activity, Mic, Square, RefreshCw, Trash2 } from 'lucide-react'
 import { detectionApi, getErrorMessage } from '@/api/client'
-import { Spinner, VerdictBadge, StatusBadge } from '@/components/ui/index'
+import { Spinner, VerdictBadge, StatusBadge, RecentDetections } from '@/components/ui/index'
 import ConfidenceTimeline from '@/components/charts/ConfidenceTimeline'
 import WaveformVisualizer from '@/components/audio/WaveformVisualizer'
 import toast from 'react-hot-toast'
@@ -584,7 +584,7 @@ export default function DetectionLab() {
       </div>
 
       {/* Recent detections */}
-      <RecentDetections />
+      <RecentDetections mode="file" />
 
       {/* Custom Microphone Permission Prompt */}
       {createPortal(
@@ -624,44 +624,6 @@ export default function DetectionLab() {
         </AnimatePresence>,
         document.body
       )}
-    </div>
-  )
-}
-
-function RecentDetections() {
-  const [jobs, setJobs] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    detectionApi.list({ page: 1, page_size: 5 })
-      .then(d => setJobs(d.jobs || []))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (loading) return <div className="min-h-[200px] flex items-center justify-center"><Spinner /></div>
-  if (!jobs.length) return null
-
-  return (
-    <div className="card rounded-2xl p-6 min-h-[200px]">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-700 text-surface-900">Recent Detections</h3>
-        <Link to="/profile?tab=detected" className="text-xs text-brand-600 font-600">View all</Link>
-      </div>
-      <div className="space-y-2">
-        {jobs.map(j => (
-          <Link key={j.id} to={`/detection/${j.id}`}
-            className="flex items-center gap-4 p-3 rounded-xl hover:bg-surface-50 transition-all group">
-            <VerdictBadge verdict={j.verdict} />
-            <div className="flex-1 min-w-0">
-               <div className="text-sm font-700 text-surface-800 truncate font-mono">{j.id}</div>
-               <div className="text-xs text-surface-500 truncate">{j.original_filename || 'Unknown file'}</div>
-            </div>
-            <span className="text-xs text-surface-400">{j.duration_seconds?.toFixed(1)}s</span>
-            <StatusBadge status={j.status} />
-          </Link>
-        ))}
-      </div>
     </div>
   )
 }

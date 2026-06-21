@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Shield, Download, ChevronLeft, FileText, User, Clock, Hash, ThumbsUp, ThumbsDown, CheckCircle2 } from 'lucide-react'
+import { Shield, Download, ChevronLeft, FileText, User, Clock, Hash, ThumbsUp, ThumbsDown, CheckCircle2, Edit2, Trash2 } from 'lucide-react'
 import { detectionApi, getErrorMessage } from '@/api/client'
 import { Reveal, VerdictBadge, StatusBadge, Spinner } from '@/components/ui/shared'
 import WaveformVisualizer from '@/components/audio/WaveformVisualizer'
@@ -33,6 +33,7 @@ export default function DetectionResult() {
   const [savingNotes, setSavingNotes] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [feedbackGiven, setFeedbackGiven] = useState(false)
+  const [editingNotes, setEditingNotes] = useState(false)
   const pollRef = React.useRef<NodeJS.Timeout>()
 
   useEffect(() => {
@@ -45,6 +46,7 @@ export default function DetectionResult() {
       const data = await detectionApi.getJob(id!)
       setJob(data)
       setNotes(data.analyst_notes || '')
+      if (data.user_feedback !== null && data.user_feedback !== undefined) setFeedbackGiven(true)
       if (data.status === 'processing' || data.status === 'queued') {
         pollRef.current = setInterval(async () => {
           const updated = await detectionApi.getJob(id!).catch(() => null)
@@ -70,9 +72,22 @@ export default function DetectionResult() {
     setSavingNotes(true)
     try {
       await detectionApi.updateNotes(id, notes)
+      setJob((prev: any) => ({ ...prev, analyst_notes: notes }))
       toast.success('Notes saved')
+      setEditingNotes(false)
     } catch { toast.error('Failed to save notes') }
     finally { setSavingNotes(false) }
+  }
+
+  const deleteNotes = async () => {
+    if (!id) return
+    if (!window.confirm('Delete analyst notes?')) return
+    try {
+      await detectionApi.updateNotes(id, '')
+      setNotes('')
+      setJob((prev: any) => ({ ...prev, analyst_notes: null }))
+      toast.success('Notes deleted')
+    } catch { toast.error('Failed to delete notes') }
   }
 
   const exportJson = async () => {
@@ -316,11 +331,37 @@ export default function DetectionResult() {
           {/* Analyst notes */}
           <Reveal delay={0.14}>
             <div className="card" style={{ padding: 24 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg)', marginBottom: 12 }}>Analyst Notes</div>
-              <textarea value={notes} onChange={e => setNotes(e.target.value)} className="input textarea" rows={4} placeholder="Add your analysis notes, observations, or case context here…" style={{ marginBottom: 10 }} />
-              <button onClick={saveNotes} disabled={savingNotes} className="btn btn-secondary btn-sm">
-                {savingNotes ? <Spinner size={12} /> : 'Save Notes'}
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--fg)' }}>Analyst Notes</div>
+                {job.analyst_notes && !editingNotes && (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button onClick={() => setEditingNotes(true)} className="btn btn-outline btn-sm" style={{ padding: '4px 8px' }}>
+                      <Edit2 size={13} />
+                    </button>
+                    <button onClick={deleteNotes} className="btn btn-outline btn-sm" style={{ padding: '4px 8px', color: 'var(--red)', borderColor: 'rgba(220,38,38,0.2)' }}>
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {job.analyst_notes && !editingNotes ? (
+                <div style={{ fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.6, padding: '12px 14px', background: 'var(--bg-2)', borderRadius: 8, whiteSpace: 'pre-wrap' }}>
+                  {job.analyst_notes}
+                </div>
+              ) : (
+                <>
+                  <textarea value={notes} onChange={e => setNotes(e.target.value)} className="input textarea" rows={4} placeholder="Add your analysis notes, observations, or case context here…" style={{ marginBottom: 10 }} />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={saveNotes} disabled={savingNotes} className="btn btn-secondary btn-sm">
+                      {savingNotes ? <Spinner size={12} /> : 'Save Notes'}
+                    </button>
+                    {job.analyst_notes && editingNotes && (
+                      <button onClick={() => { setNotes(job.analyst_notes); setEditingNotes(false) }} className="btn btn-outline btn-sm">Cancel</button>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           </Reveal>
         </div>
