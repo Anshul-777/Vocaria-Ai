@@ -24,23 +24,21 @@ The most complete open-source voice AI platform. Real voice cloning, expressive 
 - WAV, MP3, FLAC, OGG output formats
 
 ### Deepfake Detection
-- **5-model ensemble**: AASIST + RawNet2 + Prosodic + Spectral + Glottal
-- Real-time streaming detection via WebSocket (microphone)
-- Batch file analysis with confidence timeline
-- Speaker diarization with per-speaker fraud scoring
-- Chain-of-custody evidence logs
-- JSON report export
+- **AI Probability Scoring**: Powered by Wav2Vec2 and custom ensemble models (AASIST + RawNet2).
+- Real-time streaming detection via WebSocket (microphone).
+- Batch file analysis with confidence timeline.
+- Speaker diarization (Pyannote) with per-speaker fraud scoring.
+- Chain-of-custody evidence logs and JSON report export.
 
 ### Platform
-- Multi-tenant SaaS: Free / Starter / Pro / Enterprise plans
-- Real-time notifications via WebSocket
-- Full audit log with CSV export
-- API key management
-- Admin console
-- Quality Lab — SNR, speech ratio, clipping analysis
-- Benchmark Center — model accuracy, latency, hardware requirements
-- AI Chatbot assistant (Claude-powered)
-- Real-time social features: follows, likes, comments
+- Multi-tenant SaaS: Free / Starter / Pro / Enterprise plans.
+- **Quality Lab**: Drag-and-drop audio analysis for SNR, speech ratio, volume clipping, deepfake probability, and speaker diarization.
+- **Benchmark Center**: Live Cost Estimator calculator, hardware requirements, model accuracy, latency tracking, supported languages, and recommended use cases.
+- Real-time notifications via WebSocket.
+- Full audit log with CSV export.
+- API key management & Admin console.
+- AI Chatbot assistant (Claude-powered).
+- Real-time social features: follows, likes, comments in the public Voice Hub.
 
 ---
 
@@ -51,11 +49,12 @@ The most complete open-source voice AI platform. Real voice cloning, expressive 
 | Frontend            | React 18, TypeScript, Vite, Framer Motion, Recharts    |
 | Backend             | FastAPI, SQLAlchemy 2.0 async, PostgreSQL              |
 | Cache/Queue         | Redis, Celery                                          |
-| Storage             | MinIO (S3-compatible)                                  |
-| Voice Cloning       | Coqui TTS / XTTS-v2                                    |
-| Detection           | AASIST, RawNet2, + custom models                       |
+| Storage             | Supabase Storage / MinIO (S3-compatible) / Local       |
+| Voice Cloning       | Coqui TTS / XTTS-v2, Parler TTS, Chatterbox            |
+| Detection           | Wav2Vec2, AASIST, RawNet2, + custom models             |
+| STT & LLM           | Groq Whisper Turbo, Anthropic Claude                   |
 | Diarization         | pyannote.audio 3.1                                     |
-| Auth                | JWT + refresh tokens                                   |
+| Auth                | Supabase Auth / JWT                                    |
 
 ---
 
