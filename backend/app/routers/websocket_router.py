@@ -419,6 +419,121 @@ async def _stream_tts(
         yield {"type": "error", "message": str(e)[:200]}
 
 
+@router.websocket("/agent/stream")
+async def conversational_agent_stream(
+    websocket: WebSocket,
+    token: Optional[str] = Query(default=None),
+    voice_id: Optional[str] = Query(default=None),
+    language: str = Query(default="en")
+):
+    """
+    Live Conversational Voice Agent Stream.
+    Client streams audio bytes, then sends {"type": "audio_end"}.
+    Server runs STT -> LLM -> TTS and streams audio back.
+    """
+    user_id = await authenticate_ws(token)
+    if not user_id:
+        await websocket.accept()
+        await websocket.send_json({"type": "error", "message": "Unauthorized"})
+        await websocket.close(code=4001)
+        return
+
+    connected = await manager.connect(websocket, user_id)
+    if not connected:
+        return
+
+    logger.info(f"Agent stream started: user={user_id} voice={voice_id}")
+
+    await websocket.send_json({
+        "type": "ready",
+        "message": "Agent stream connected. Send audio bytes, then {'type': 'audio_end'}.",
+    })
+
+    try:
+        from app.ml.stt_pipeline import get_stt_pipeline
+        from app.ml.llm_engine import get_llm_engine
+        
+        stt = get_stt_pipeline()
+        llm = get_llm_engine()
+        chat_session = llm.create_chat_session()
+        
+        audio_buffer = bytearray()
+
+        while True:
+            data = await websocket.receive()
+            
+            if "bytes" in data:
+                audio_buffer.extend(data["bytes"])
+                
+            elif "text" in data:
+                try:
+                    msg = json.loads(data["text"])
+                except json.JSONDecodeError:
+                    continue
+                    
+                if msg.get("type") == "ping":
+                    await websocket.send_json({"type": "pong", "ts": time.time()})
+                    
+                elif msg.get("type") == "stop":
+                    break
+                    
+                elif msg.get("type") in ["audio_end", "text"]:
+                    transcript = ""
+                    if msg.get("type") == "audio_end":
+                        if len(audio_buffer) < 100:
+                            audio_buffer.clear()
+                            continue
+
+                        # 1. STT
+                        await websocket.send_json({"type": "status", "message": "Listening..."})
+                        transcript = await stt.transcribe_audio_chunk(bytes(audio_buffer))
+                        audio_buffer.clear()
+                    else:
+                        transcript = msg.get("text", "")
+                    
+                    if not transcript.strip():
+                        continue
+                        
+                    current_voice_id = msg.get("voice_id") or voice_id
+                    if not current_voice_id:
+                        await websocket.send_json({
+                            "type": "error", 
+                            "message": "Please select a Voice Identity for the agent before interacting."
+                        })
+                        continue
+                        
+                    await websocket.send_json({"type": "transcript", "text": transcript, "source": "user"})
+                    
+                    # 2. LLM
+                    await websocket.send_json({"type": "status", "message": "Thinking..."})
+                    llm_text = ""
+                    async for token_text in llm.generate_response_stream(chat_session, transcript):
+                        llm_text += token_text
+                    
+                    await websocket.send_json({"type": "transcript", "text": llm_text, "source": "agent"})
+                    
+                    # 3. TTS Stream
+                    await websocket.send_json({"type": "status", "message": "Speaking..."})
+                    async for chunk_data in _stream_tts(llm_text, current_voice_id, language, 1.0, 0.7):
+                        if chunk_data["type"] == "audio":
+                            await websocket.send_json({
+                                "type": "audio_chunk",
+                                "chunk_idx": chunk_data["chunk_idx"],
+                                "sample_rate": chunk_data["sample_rate"]
+                            })
+                            await websocket.send_bytes(chunk_data["audio"])
+                        elif chunk_data["type"] == "error":
+                            await websocket.send_json({"type": "error", "message": chunk_data["message"]})
+                            
+                    await websocket.send_json({"type": "status", "message": "Idle"})
+
+    except WebSocketDisconnect:
+        logger.info(f"Agent stream disconnected: user={user_id}")
+    except Exception as e:
+        logger.error(f"Agent stream error: {e}", exc_info=True)
+    finally:
+        manager.disconnect(websocket, user_id)
+
 @router.websocket("/notifications")
 async def notification_stream(
     websocket: WebSocket,

@@ -117,11 +117,11 @@ async def repopulate():
                         ensemble_confidence=ensemble_conf,
                         is_synthetic=is_synth,
                         risk_score=ensemble_conf + random.uniform(-0.05, 0.05),
-                        aasist_score=aasist_sc,
-                        rawnet2_score=rawnet2_sc,
-                        prosodic_score=prosodic_sc,
-                        spectral_score=spectral_sc,
-                        glottal_score=glottal_sc,
+                        pipeline_metrics={
+                            "wav2vec2_deepfake": {"score": ensemble_conf, "status": "online"},
+                            "pyannote_diarization": {"speakers_detected": 1, "status": "online"},
+                            "squim_quality": {"status": "online"}
+                        },
                         duration_seconds=random.uniform(5.0, 30.0),
                         processing_time_ms=random.randint(800, 2500),
                         user_feedback=user_feedback,

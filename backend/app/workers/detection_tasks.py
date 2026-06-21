@@ -117,7 +117,7 @@ async def _run_detection_async(
             "job_id": job_id,
             "verdict": detection_result.verdict,
             "ensemble_confidence": detection_result.ensemble_confidence,
-            "model_scores": detection_result.model_scores,
+            "pipeline_metrics": detection_result.pipeline_metrics,
             "segments": detection_result.segments,
         }, sort_keys=True, default=str)
         evidence_hash = hashlib.sha256(evidence_data.encode()).hexdigest()
@@ -135,11 +135,7 @@ async def _run_detection_async(
                 job.ensemble_confidence = detection_result.ensemble_confidence
                 job.is_synthetic = detection_result.is_synthetic
                 job.risk_score = detection_result.risk_score
-                job.aasist_score = detection_result.model_scores.get("aasist")
-                job.rawnet2_score = detection_result.model_scores.get("rawnet2")
-                job.prosodic_score = detection_result.model_scores.get("prosodic")
-                job.spectral_score = detection_result.model_scores.get("spectral")
-                job.glottal_score = detection_result.model_scores.get("glottal")
+                job.pipeline_metrics = detection_result.pipeline_metrics
                 job.segments = detection_result.segments
                 job.suspicious_segments = detection_result.suspicious_segments
                 job.confidence_timeline = detection_result.confidence_timeline

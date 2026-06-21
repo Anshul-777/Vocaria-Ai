@@ -213,6 +213,7 @@ export const qualityApi = {
 export const benchmarksApi = {
   models: () => api.get('/benchmarks/models').then(r => r.data),
   system: () => api.get('/benchmarks/system').then(r => r.data),
+  live: () => api.get('/benchmarks/live').then(r => r.data),
 }
 
 // ─── Admin ───────────────────────────────────────────────────────────────────

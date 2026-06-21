@@ -90,8 +90,8 @@ async def generate_speech(
 
     # Use background tasks locally to avoid Celery/Redis dependency
     try:
-        from app.workers.generation_tasks import _run_generation_async
-        background_tasks.add_task(_run_generation_async, None, job.id, current_user.id)
+        from app.workers.generation_tasks import _run_gen_async
+        background_tasks.add_task(_run_gen_async, None, job.id, current_user.id)
         import uuid
         job.celery_task_id = f"local-{uuid.uuid4()}"
         await db.commit()
@@ -355,7 +355,10 @@ async def get_generation_job(job_id: str, current_user: User = Depends(get_curre
     return {
         "id": job.id, "status": job.status, "progress": job.progress,
         "text": job.text[:200] + ("..." if len(job.text) > 200 else ""),
+        "speaking_style": job.speaking_style,
         "language": job.language, "emotion": job.emotion,
+        "model": (job.extra_metadata or {}).get("model", "kokoro-82m"),
+        "extra_metadata": job.extra_metadata,
         "voice_profile_id": job.voice_profile_id,
         "duration_seconds": job.duration_seconds,
         "character_count": job.character_count,
@@ -377,6 +380,8 @@ async def list_generation_jobs(
     jobs = result.scalars().all()
     return {"total": total, "jobs": [{
         "id": j.id, "status": j.status, "language": j.language,
+        "text": j.text[:50] + ("..." if len(j.text) > 50 else ""),
+        "model": (j.extra_metadata or {}).get("model", "kokoro-82m"),
         "emotion": j.emotion, "voice_profile_id": j.voice_profile_id,
         "character_count": j.character_count, "duration_seconds": j.duration_seconds,
         "output_format": j.output_format, "created_at": j.created_at,

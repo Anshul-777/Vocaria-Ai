@@ -67,11 +67,11 @@ async def populate():
                         verdict=verdict,
                         ensemble_confidence=conf,
                         risk_score=risk,
-                        aasist_score=aasist,
-                        rawnet2_score=rawnet2,
-                        prosodic_score=prosodic,
-                        spectral_score=spectral,
-                        glottal_score=glottal,
+                        pipeline_metrics={
+                            "wav2vec2_deepfake": {"score": conf, "status": "online"},
+                            "pyannote_diarization": {"speakers_detected": 1, "status": "online"},
+                            "squim_quality": {"status": "online"}
+                        },
                         user_feedback=user_feedback,
                         created_at=day - timedelta(hours=random.randint(0, 23))
                     )

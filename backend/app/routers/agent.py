@@ -23,6 +23,7 @@ class AgentChatRequest(BaseModel):
     voice_profile_id: str
     message: str
     mode: str = 'default' # default, interview, storytelling
+    history: list[dict] = []
 
 class PromptEnhanceRequest(BaseModel):
     prompt: Optional[str] = ""
@@ -83,7 +84,8 @@ async def enhance_prompt(
             except Exception as groq_e:
                 print(f"Groq API error in enhance_prompt: {groq_e}")
             
-        return {"enhanced_prompt": prompt_text}
+        mock_res = prompt_text + " (enhanced mock)" if prompt_text else "A deep, raspy voice of an old wizard speaking slowly and mysteriously"
+        return {"enhanced_prompt": mock_res}
 
 @router.post('/phrase/enhance')
 async def enhance_phrase(
@@ -136,7 +138,8 @@ Return ONLY the final spoken text without any quotes, explanations, or markdown 
             except Exception as groq_e:
                 print(f"Groq API error in enhance_phrase: {groq_e}")
             
-        return {"enhanced_phrase": phrase_text}
+        mock_res = phrase_text + " (enhanced)" if phrase_text else "In the silence of the void, I found my true voice."
+        return {"enhanced_phrase": mock_res}
 
 @router.post('/chat')
 async def chat_with_agent(
@@ -175,9 +178,16 @@ async def chat_with_agent(
                 bot_text = f'I hear you saying: {message}. How can I assist you further with that?'
         else:
             client = genai.Client(api_key=settings.GEMINI_API_KEY)
-            response = client.models.generate_content(
-                model='gemini-3.5-flash',
-                contents=message,
+            
+            contents = []
+            for msg in body.history:
+                role = "model" if msg.get("role") == "agent" else "user"
+                contents.append({"role": role, "parts": [{"text": msg.get("content", "")}]})
+            contents.append({"role": "user", "parts": [{"text": message}]})
+
+            response = await client.aio.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=contents,
                 config=genai.types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     temperature=0.7,
@@ -189,28 +199,45 @@ async def chat_with_agent(
     except Exception as e:
         print(f"Gemini API error in chat_with_agent: {e}")
         try:
-            print("Falling back to Groq API...")
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    "https://api.groq.com/openai/v1/chat/completions",
-                    headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
-                    json={
-                        "model": "llama-3.1-8b-instant",
-                        "messages": [
-                            {"role": "system", "content": system_instruction},
-                            {"role": "user", "content": message}
-                        ],
-                        "temperature": 0.7
-                    },
-                    timeout=10.0
-                )
-                if resp.status_code == 200:
-                    bot_text = resp.json()["choices"][0]["message"]["content"].strip()
-                else:
-                    bot_text = f"I'm sorry, I'm having trouble thinking right now."
+            if getattr(settings, "GROQ_API_KEY", None):
+                print("Falling back to Groq API...")
+                async with httpx.AsyncClient() as client:
+                    groq_messages = [{"role": "system", "content": system_instruction}]
+                    for msg in body.history:
+                        groq_messages.append({
+                            "role": "assistant" if msg.get("role") == "agent" else "user", 
+                            "content": msg.get("content", "")
+                        })
+                    groq_messages.append({"role": "user", "content": message})
+                    
+                    resp = await client.post(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        headers={"Authorization": f"Bearer {settings.GROQ_API_KEY}"},
+                        json={
+                            "model": "llama-3.1-8b-instant",
+                            "messages": groq_messages,
+                            "temperature": 0.7
+                        },
+                        timeout=10.0
+                    )
+                    if resp.status_code == 200:
+                        bot_text = resp.json()["choices"][0]["message"]["content"].strip()
+                    else:
+                        raise Exception("Groq returned non-200")
+            else:
+                raise Exception("Groq not configured")
         except Exception as groq_e:
-            print(f"Groq API error in chat_with_agent: {groq_e}")
-            bot_text = f"I'm sorry, I'm having trouble thinking right now."
+            print(f"Groq API error / Fallback triggered: {groq_e}")
+            if body.mode == 'interview':
+                bot_text = f'That is a very interesting point... Can you tell me more about your experience?'
+            elif body.mode == 'storytelling':
+                bot_text = f'Once upon a time, they said: {message}. And then the adventure truly began!'
+            elif body.mode == 'sales':
+                bot_text = f'I completely understand where you are coming from. But what if we could solve that for you today?'
+            elif body.mode == 'support':
+                bot_text = f'I apologize for the inconvenience. Please give me a moment while I look into that for you.'
+            else:
+                bot_text = f'I hear you saying: {message}. How can I assist you further with that?'
 
     # 2. Trigger TTS Generation for the bot_text
     await check_generation_quota(current_user, len(bot_text), db)
@@ -232,8 +259,8 @@ async def chat_with_agent(
     await db.commit()
     await db.refresh(job)
 
-    from app.workers.generation_tasks import _run_generation_async
-    background_tasks.add_task(_run_generation_async, None, job.id, current_user.id)
+    from app.workers.generation_tasks import _run_gen_async
+    background_tasks.add_task(_run_gen_async, None, job.id, current_user.id)
     import uuid
     job.celery_task_id = f"local-{uuid.uuid4()}"
     await db.commit()

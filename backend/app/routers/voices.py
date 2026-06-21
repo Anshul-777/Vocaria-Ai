@@ -248,7 +248,8 @@ async def attach_generation(voice_id: str, body: AttachGenerationRequest, curren
 
     job_result = await db.execute(select(GenerationJob).where(GenerationJob.id == body.job_id, GenerationJob.user_id == current_user.id))
     job = job_result.scalar_one_or_none()
-    if not job or job.status != "completed" or not job.output_storage_key:
+    from app.models import JobStatus
+    if not job or job.status != JobStatus.COMPLETED or not job.output_storage_key:
         raise HTTPException(400, "Invalid or incomplete generation job")
 
     from app.utils.storage import get_storage
