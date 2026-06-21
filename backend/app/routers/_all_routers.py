@@ -702,6 +702,15 @@ async def mark_read(notif_id: str, current_user: User = Depends(get_current_user
         await db.commit()
     return {"message": "Marked as read"}
 
+@notifications_router.delete("/{notif_id}")
+async def delete_notification(notif_id: str, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Notification).where(Notification.id == notif_id, Notification.user_id == current_user.id))
+    n = result.scalar_one_or_none()
+    if n:
+        await db.delete(n)
+        await db.commit()
+    return {"message": "Notification deleted"}
+
 
 @notifications_router.post("/read-all")
 async def mark_all_read(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):

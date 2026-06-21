@@ -9,6 +9,7 @@ import {
 import clsx from 'clsx'
 import { useAuthStore } from '@/store/authStore'
 import { supabase } from '@/lib/supabase'
+import api from '@/api/client'
 import { VocariaLogo } from '@/components/ui/VocariaLogo'
 
 const NAV_SECTIONS = [
@@ -373,7 +374,7 @@ export default function AppLayout() {
               >
                 {/* Mobile Sidebar Header */}
                 <div className="flex items-center justify-between px-4 h-16 border-b border-gray-200">
-                  <VocariaLogo onClick={() => {}} />
+                  <VocariaLogo onClick={() => { }} />
                   <button
                     onClick={() => setMobileSidebar(false)}
                     className="p-2 text-gray-500 hover:text-black rounded-lg hover:bg-gray-100 transition-colors"

@@ -6,7 +6,7 @@ import { Reveal, EmptyState, Spinner } from '@/components/ui/shared'
 import { formatDistanceToNow } from 'date-fns'
 import toast from 'react-hot-toast'
 import { Search, Filter } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
+import api from '@/api/client'
 
 import { Sparkles, AlertCircle, Info, ShieldAlert } from 'lucide-react'
 
@@ -38,19 +38,10 @@ export default function NotificationsPage() {
   const load = async () => {
     setLoading(true)
     try {
-      const { data: userData } = await supabase.auth.getUser()
-      if (!userData?.user) return
-
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userData.user.id)
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
-
-      setNotifs(data || [])
-      setUnread((data || []).filter(n => !n.is_read).length)
+      const res = await api.get('/api/v1/notifications')
+      const data = res.data?.notifications || []
+      setNotifs(data)
+      setUnread(data.filter((n: any) => !n.is_read).length)
     } catch (err) {
       console.error(err)
     } finally {
@@ -71,30 +62,33 @@ export default function NotificationsPage() {
 
   const markRead = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id)
-    setNotifs(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
-    setUnread(prev => Math.max(0, prev - 1))
+    try {
+      await api.post(`/api/v1/notifications/${id}/read`)
+      setNotifs(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n))
+      setUnread(prev => Math.max(0, prev - 1))
+    } catch (err) { console.error(err) }
   }
 
   const deleteNotif = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    await supabase.from('notifications').delete().eq('id', id)
-    const notif = notifs.find(n => n.id === id)
-    setNotifs(prev => prev.filter(n => n.id !== id))
-    if (notif && !notif.is_read) {
-      setUnread(prev => Math.max(0, prev - 1))
-    }
-    toast.success('Notification deleted')
+    try {
+      await api.delete(`/api/v1/notifications/${id}`)
+      const notif = notifs.find(n => n.id === id)
+      setNotifs(prev => prev.filter(n => n.id !== id))
+      if (notif && !notif.is_read) {
+        setUnread(prev => Math.max(0, prev - 1))
+      }
+      toast.success('Notification deleted')
+    } catch (err) { console.error(err) }
   }
 
   const markAllRead = async () => {
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData?.user) return
-
-    await supabase.from('notifications').update({ is_read: true }).eq('user_id', userData.user.id).eq('is_read', false)
-    setNotifs(prev => prev.map(n => ({ ...n, is_read: true })))
-    setUnread(0)
-    toast.success('All marked as read')
+    try {
+      await api.post('/api/v1/notifications/read-all')
+      setNotifs(prev => prev.map(n => ({ ...n, is_read: true })))
+      setUnread(0)
+      toast.success('All marked as read')
+    } catch (err) { console.error(err) }
   }
 
   return (
