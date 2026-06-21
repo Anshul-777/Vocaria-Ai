@@ -84,6 +84,7 @@ export default function GeneratePage() {
   const [exaggeration, setExaggeration] = useState(0.5)
   const [cfgWeight, setCfgWeight] = useState(0.5)
   const [cbEmotion, setCbEmotion] = useState('neutral')
+  const [voicePrompt, setVoicePrompt] = useState('A clear and articulate speech with moderate pacing.')
 
   const [testText, setTestText] = useState('Hello! This is how I sound based on your description.')
   const [generating, setGenerating] = useState(false)
@@ -145,15 +146,6 @@ export default function GeneratePage() {
       toast.error('Please enter a test phrase for the voice to speak.')
       return
     }
-    if (!selectedProfile) {
-      toast.error('Please select or create a voice profile.')
-      return
-    }
-    if (selectedProfile === 'new' && !newProfileName.trim()) {
-      toast.error('Please enter a name for the new voice profile.')
-      return
-    }
-    
     setGenerating(true)
     setResult(null)
     
@@ -238,7 +230,22 @@ export default function GeneratePage() {
           accent: accent,
           age_bracket: age.toLowerCase().replace(' ', '_'),
           use_case: 'generated',
-          labels: ['synthetic', 'generated']
+          labels: ['synthetic', 'generated'],
+          extra_metadata: {
+            model: selectedModel,
+            ...(selectedModel === 'kokoro-82m' ? {
+              gender: gender.toLowerCase(),
+              age: age.toLowerCase().replace(' ', '_'),
+              accent: accent.toLowerCase(),
+            } : {}),
+            ...(selectedModel === 'chatterbox-turbo' ? {
+              exaggeration,
+              cfgWeight,
+            } : {}),
+            ...(selectedModel === 'parler-tts' ? {
+              prompt: voicePrompt
+            } : {})
+          }
         })
         targetProfileId = newProfile.id
       }
@@ -339,9 +346,11 @@ export default function GeneratePage() {
                   value={prompt} 
                   onChange={e => setPrompt(e.target.value)} 
                   rows={3}
-                  placeholder={selectedModel === 'chatterbox-turbo'
-                    ? "E.g., A warm, conversational voice telling a bedtime story with gentle pauses and soft laughter..."
-                    : "E.g., A deep, raspy voice of an old wizard speaking slowly and mysteriously..."
+                  placeholder={selectedModel === 'parler-tts'
+                    ? "E.g., A female speaker delivers a slightly expressive and animated speech..."
+                    : selectedModel === 'chatterbox-turbo'
+                      ? "E.g., A warm, conversational voice telling a bedtime story with gentle pauses and soft laughter..."
+                      : "E.g., A deep, raspy voice of an old wizard speaking slowly and mysteriously..."
                   }
                   className="input textarea" 
                   style={{ fontFamily: "'DM Sans', sans-serif", lineHeight: 1.6, resize: 'none' }} 
@@ -386,8 +395,8 @@ export default function GeneratePage() {
 
                 {/* Model Selector */}
                 <div style={{ marginBottom: 16, padding: 16, borderRadius: 12, border: '1px solid #e2e8f0', background: '#f8fafc' }}>
-                  <label className="label text-xs" style={{ marginBottom: 8, display: 'block' }}>Voice Engine <Tip text="Choose which AI model generates your voice. Kokoro is fast on CPU with preset voices. Chatterbox Turbo uses your GPU for hyper-realistic neural speech with emotion control." /></label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <label className="label text-xs" style={{ marginBottom: 8, display: 'block' }}>Voice Engine <Tip text="Choose which AI model generates your voice. Kokoro is fast on CPU with preset voices. Chatterbox Turbo uses your GPU for hyper-realistic neural speech with emotion control. Parler-TTS allows prompt-based generation." /></label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
                     <button
                       type="button"
                       onClick={() => setSelectedModel('kokoro-82m')}
@@ -400,9 +409,8 @@ export default function GeneratePage() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Cpu size={14} style={{ color: selectedModel === 'kokoro-82m' ? '#2563eb' : '#94a3b8' }} />
                         <span style={{ fontSize: 13, fontWeight: 700, color: selectedModel === 'kokoro-82m' ? '#2563eb' : '#334155' }}>Kokoro 82M</span>
-                        <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: '#dbeafe', color: '#2563eb' }}>CPU</span>
                       </div>
-                      <span style={{ fontSize: 11, color: '#94a3b8' }}>Ultra-fast, 50+ voices, 10 languages</span>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>Fast presets</span>
                     </button>
                     <button
                       type="button"
@@ -415,14 +423,28 @@ export default function GeneratePage() {
                     >
                       {/* Recommended badge */}
                       <div style={{ position: 'absolute', top: -8, right: 8, background: 'linear-gradient(135deg, #7c3aed, #a855f7)', color: 'white', fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 3, boxShadow: '0 2px 8px rgba(124,58,237,0.3)' }}>
-                        <Star size={8} fill="white" /> RECOMMENDED
+                        <Star size={8} fill="white" /> REC
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Zap size={14} style={{ color: selectedModel === 'chatterbox-turbo' ? '#7c3aed' : '#94a3b8' }} />
-                        <span style={{ fontSize: 13, fontWeight: 700, color: selectedModel === 'chatterbox-turbo' ? '#7c3aed' : '#334155' }}>Chatterbox Turbo</span>
-                        <span style={{ fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 6, background: '#ede9fe', color: '#7c3aed' }}>GPU</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: selectedModel === 'chatterbox-turbo' ? '#7c3aed' : '#334155' }}>Chatterbox</span>
                       </div>
-                      <span style={{ fontSize: 11, color: '#94a3b8' }}>Hyper-realistic, emotion control, cloning</span>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>Hyper-realistic</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedModel('parler-tts')}
+                      style={{
+                        padding: '12px 16px', borderRadius: 10, border: selectedModel === 'parler-tts' ? '2px solid #059669' : '1px solid #e2e8f0',
+                        background: selectedModel === 'parler-tts' ? '#ecfdf5' : 'white', cursor: 'pointer',
+                        display: 'flex', flexDirection: 'column', gap: 4, textAlign: 'left', position: 'relative',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Wand2 size={14} style={{ color: selectedModel === 'parler-tts' ? '#059669' : '#94a3b8' }} />
+                        <span style={{ fontSize: 13, fontWeight: 700, color: selectedModel === 'parler-tts' ? '#059669' : '#334155' }}>Parler-TTS</span>
+                      </div>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>Prompt-based</span>
                     </button>
                   </div>
                 </div>
@@ -503,6 +525,9 @@ export default function GeneratePage() {
                     </div>
                   </div>
                 )}
+
+                {/* Parler-TTS does not use standard sliders, it relies solely on the prompt above */}
+
               </div>
             </div>
           </Reveal>
@@ -537,28 +562,7 @@ export default function GeneratePage() {
             </div>
           </Reveal>
 
-          <Reveal delay={0.08}>
-            <div className="card" style={{ padding: 24 }}>
-              <label className="label">Target Voice Profile</label>
-              <p style={{ color: '#94a3b8', fontSize: 12, marginBottom: 12 }}>
-                Select an existing profile to add this voice to, or create a new profile container for it.
-              </p>
-              <select value={selectedProfile} onChange={e => setSelectedProfile(e.target.value)} className="input select" style={{ marginBottom: selectedProfile === 'new' ? 12 : 0 }}>
-                <option value="">— Select Target Profile —</option>
-                <option value="new">+ Create New Profile</option>
-                {voices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
-              </select>
-              {selectedProfile === 'new' && (
-                <input 
-                  type="text" 
-                  value={newProfileName}
-                  onChange={e => setNewProfileName(e.target.value)}
-                  placeholder="E.g., Mysterious Wizard"
-                  className="input"
-                />
-              )}
-            </div>
-          </Reveal>
+
         </div>
 
         {/* Action & Output */}
@@ -574,7 +578,9 @@ export default function GeneratePage() {
                 width: '100%', padding: '16px', borderRadius: 16, border: 'none', 
                 background: generating ? '#94a3b8' : selectedModel === 'chatterbox-turbo' 
                   ? 'linear-gradient(135deg, #7c3aed, #a855f7)' 
-                  : 'linear-gradient(135deg, #2563eb, #3b82f6)', 
+                  : selectedModel === 'parler-tts'
+                    ? 'linear-gradient(135deg, #059669, #10b981)'
+                    : 'linear-gradient(135deg, #2563eb, #3b82f6)', 
                 color: 'white', fontSize: 16, fontWeight: 700, 
                 cursor: generating ? 'not-allowed' : 'pointer', 
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, 
@@ -588,10 +594,10 @@ export default function GeneratePage() {
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
                     <RefreshCw size={18} />
                   </motion.div>
-                  Generating with {selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo' : 'Kokoro 82M'}...
+                  Generating with {selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo' : selectedModel === 'parler-tts' ? 'Parler-TTS' : 'Kokoro 82M'}...
                 </>
               ) : (
-                <><Wand2 size={18} /> Generate with {selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo (GPU)' : 'Kokoro 82M (CPU)'}</>
+                <><Wand2 size={18} /> Generate with {selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo (GPU)' : selectedModel === 'parler-tts' ? 'Parler-TTS (CPU)' : 'Kokoro 82M (CPU)'}</>
               )}
             </motion.button>
           </Reveal>
@@ -607,13 +613,15 @@ export default function GeneratePage() {
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 6, repeat: Infinity, ease: 'linear' }}
                     style={{ position: 'absolute', inset: -6, border: '2px dashed', borderColor: selectedModel === 'chatterbox-turbo' ? '#a78bfa' : '#93c5fd', borderRadius: '50%', opacity: 0.4 }} />
                   <motion.div animate={{ rotate: -360 }} transition={{ duration: 10, repeat: Infinity, ease: 'linear' }}
-                    style={{ position: 'absolute', inset: -14, border: '1px solid', borderColor: selectedModel === 'chatterbox-turbo' ? '#c4b5fd' : '#bfdbfe', borderRadius: '50%', opacity: 0.25 }} />
+                    style={{ position: 'absolute', inset: -14, border: '1px solid', borderColor: selectedModel === 'chatterbox-turbo' ? '#c4b5fd' : selectedModel === 'parler-tts' ? '#6ee7b7' : '#bfdbfe', borderRadius: '50%', opacity: 0.25 }} />
                   <motion.div animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 2, repeat: Infinity }}
                     style={{ 
                       position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
                       background: selectedModel === 'chatterbox-turbo' 
                         ? 'linear-gradient(135deg, #7c3aed, #a855f7)' 
-                        : 'linear-gradient(135deg, #2563eb, #60a5fa)',
+                        : selectedModel === 'parler-tts'
+                          ? 'linear-gradient(135deg, #059669, #10b981)'
+                          : 'linear-gradient(135deg, #2563eb, #60a5fa)',
                       borderRadius: '50%', color: 'white',
                       boxShadow: selectedModel === 'chatterbox-turbo' 
                         ? '0 0 30px rgba(124,58,237,0.5)' 
@@ -624,10 +632,10 @@ export default function GeneratePage() {
                 </div>
 
                 <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 16, color: '#0a0f1e', marginBottom: 4 }}>
-                  {selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo' : 'Kokoro 82M'} is generating...
+                  {selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo' : selectedModel === 'parler-tts' ? 'Parler-TTS' : 'Kokoro 82M'} is generating...
                 </div>
                 <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 20 }}>
-                  {selectedModel === 'chatterbox-turbo' ? 'GPU-accelerated neural speech synthesis' : 'CPU-based ultra-fast voice generation'}
+                  {selectedModel === 'chatterbox-turbo' ? 'GPU-accelerated neural speech synthesis' : selectedModel === 'parler-tts' ? 'Prompt-based expressive neural voice generation' : 'CPU-based ultra-fast voice generation'}
                 </div>
 
                 {/* Pipeline steps */}
@@ -680,10 +688,10 @@ export default function GeneratePage() {
                     Generated Preview
                     <span style={{ 
                       fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 6,
-                      background: selectedModel === 'chatterbox-turbo' ? '#ede9fe' : '#dbeafe',
-                      color: selectedModel === 'chatterbox-turbo' ? '#7c3aed' : '#2563eb',
+                      background: selectedModel === 'chatterbox-turbo' ? '#ede9fe' : selectedModel === 'parler-tts' ? '#d1fae5' : '#dbeafe',
+                      color: selectedModel === 'chatterbox-turbo' ? '#7c3aed' : selectedModel === 'parler-tts' ? '#059669' : '#2563eb',
                     }}>
-                      {selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo' : 'Kokoro 82M'}
+                      {selectedModel === 'chatterbox-turbo' ? 'Chatterbox Turbo' : selectedModel === 'parler-tts' ? 'Parler-TTS' : 'Kokoro 82M'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#64748b' }}>
@@ -697,16 +705,43 @@ export default function GeneratePage() {
                 )}
                 
                 <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid #f1f5f9' }}>
-                  <label className="label">Save Voice</label>
-                  <p style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
-                    Like this voice? Save it to {selectedProfile === 'new' ? `your new profile "${newProfileName}"` : 'your selected profile'} to use it in agents and generations.
+                  <label className="label" style={{ marginBottom: 4 }}>Save Voice</label>
+                  <p style={{ color: '#94a3b8', fontSize: 12, marginBottom: 12 }}>
+                    Select an existing profile to add this voice to, or create a new profile.
                   </p>
+                  
+                  <div style={{ marginBottom: 16 }}>
+                    <select value={selectedProfile} onChange={e => setSelectedProfile(e.target.value)} className="input select" style={{ marginBottom: selectedProfile === 'new' ? 12 : 0 }}>
+                      <option value="">— Select Target Profile —</option>
+                      <option value="new">+ Create New Profile</option>
+                      {voices.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+                    </select>
+                    {selectedProfile === 'new' && (
+                      <input 
+                        type="text" 
+                        value={newProfileName}
+                        onChange={e => setNewProfileName(e.target.value)}
+                        placeholder="E.g., Mysterious Wizard"
+                        className="input"
+                      />
+                    )}
+                  </div>
                   
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button onClick={handleSaveProfile} disabled={saving} className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }}>
                       {saving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />} 
                       Save Voice
                     </button>
+                    <a 
+                      href={result.output_url} 
+                      download={`Vocaria_Generation_${new Date().getTime()}.wav`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-secondary px-3" 
+                      title="Download Audio"
+                    >
+                      <Download size={16} />
+                    </a>
                     <button onClick={() => { setResult(null); generate() }} className="btn btn-secondary px-3" title="Regenerate">
                       <RefreshCw size={16} />
                     </button>

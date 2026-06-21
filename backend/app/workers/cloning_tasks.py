@@ -58,11 +58,23 @@ async def _run_clone_async(task, job_id, user_id, voice_profile_id, mode, fine_t
         # so generation.py knows where to find the reference audio.
         embedding_storage_key = samples[0].storage_key
 
+        # Extract advanced parameters from extra_metadata
+        extra_metadata = job.extra_metadata or {}
+        preview_text = extra_metadata.get("test_phrase") or "Hello, this is a preview of your cloned voice using the Chatterbox engine."
+        exag = float(extra_metadata.get("exaggeration", 0.5))
+        cfg = float(extra_metadata.get("cfg_weight", 0.5))
+        temp = float(extra_metadata.get("temperature", 0.8))
+
         # Generate preview
         preview_url = None
         try:
-            preview_text = "Hello, this is a preview of your cloned voice using the Chatterbox engine."
-            audio_bytes, sr = await tts.synthesize(preview_text, speaker_wav=reference_audio_path)
+            audio_bytes, sr = await tts.synthesize(
+                preview_text, 
+                speaker_wav=reference_audio_path,
+                exaggeration=exag,
+                cfg_weight=cfg,
+                temperature=temp
+            )
             preview_key = f"previews/{user_id}/{voice_profile_id}/preview.wav"
             await storage.upload(settings.BUCKET_OUTPUTS, preview_key, audio_bytes, "audio/wav")
             preview_url = await storage.presigned_url(settings.BUCKET_OUTPUTS, preview_key, expires_hours=168)

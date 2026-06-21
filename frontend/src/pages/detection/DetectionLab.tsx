@@ -134,15 +134,17 @@ export default function DetectionLab() {
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       const recorder = new MediaRecorder(stream)
-      chunksRef.current = []
+      const chunks: Blob[] = []
       
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data)
+        if (e.data && e.data.size > 0) chunks.push(e.data)
       }
       
       recorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-        const newFile = new File([blob], 'recording.webm', { type: 'audio/webm' })
+        const mimeType = recorder.mimeType || 'audio/webm'
+        const blob = new Blob(chunks, { type: mimeType })
+        const ext = mimeType.includes('mp4') ? 'mp4' : mimeType.includes('ogg') ? 'ogg' : 'webm'
+        const newFile = new File([blob], `recording.${ext}`, { type: mimeType })
         setFile(newFile)
         setFileUrl(URL.createObjectURL(blob))
         setResult(null)
@@ -150,7 +152,7 @@ export default function DetectionLab() {
       }
       
       mediaRecorderRef.current = recorder
-      recorder.start(250)
+      recorder.start()
       setIsRecording(true)
       setRecordingTime(0)
       timerRef.current = setInterval(() => {

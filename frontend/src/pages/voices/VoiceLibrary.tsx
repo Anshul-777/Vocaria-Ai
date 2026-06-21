@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Search, Mic2, Wand2, Edit3, Trash2, Globe, Lock, Building2, MoreHorizontal, Zap, Play, Bot, Headphones, Hash } from 'lucide-react'
+import { Plus, Search, Mic2, Wand2, Edit3, Trash2, Globe, Lock, Building2, MoreHorizontal, Zap, Play, Bot, Headphones, Hash, Pin } from 'lucide-react'
 import { voicesApi } from '@/api/client'
 import { Reveal, StaggerGroup, StaggerItem } from '@/hooks/motionVariants'
 import { Spinner } from '@/components/ui'
@@ -20,7 +20,7 @@ const TRAINING_COLORS: Record<string, string> = {
   ready: '#059669', training: '#d97706', failed: '#ef4444', pending: '#94a3b8',
 }
 
-export function VoiceCard({ voice, onDelete, onGenerate, onClone }: { voice: any; onDelete: () => void; onGenerate: () => void; onClone: () => void }) {
+export function VoiceCard({ voice, onDelete, onGenerate, onClone, onPin }: { voice: any; onDelete: () => void; onGenerate: () => void; onClone: () => void; onPin: () => void }) {
   const [menu, setMenu] = useState(false)
   const [hovering, setHovering] = useState(false)
   const VisIcon = VISIBILITY_CONFIG[voice.visibility]?.icon || Lock
@@ -68,25 +68,30 @@ export function VoiceCard({ voice, onDelete, onGenerate, onClone }: { voice: any
               {voice.name}
             </h3>
             
-            {/* Menu */}
-            <div className="relative">
-              <button onClick={e => { e.stopPropagation(); setMenu(!menu) }}
-                className="text-gray-400 hover:text-black hover:bg-gray-100 p-1.5 rounded-lg transition-colors">
-                <MoreHorizontal size={18} />
-              </button>
-              <AnimatePresence>
+            {/* Menu & Indicators */}
+            <div className="flex items-center gap-1">
+              {voice.is_pinned && <Pin size={16} className="text-blue-600 fill-blue-600 mr-1" />}
+              <div className="relative">
+                <button onClick={e => { e.stopPropagation(); setMenu(!menu) }}
+                  className="text-gray-400 hover:text-black hover:bg-gray-100 p-1.5 rounded-lg transition-colors">
+                  <MoreHorizontal size={18} />
+                </button>
+                <AnimatePresence>
                 {menu && (
                   <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
                     className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-gray-100 w-40 z-20 py-1"
                     onMouseLeave={() => setMenu(false)}>
-                    <button onClick={(e) => { e.stopPropagation(); navigate(`/voices/${voice.id}`); setMenu(false) }} className="w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"><Edit3 size={14}/> Edit Profile</button>
-                    <button onClick={(e) => { e.stopPropagation(); onGenerate(); setMenu(false) }} className="w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"><Wand2 size={14}/> Generate</button>
-                    <button onClick={(e) => { e.stopPropagation(); onClone(); setMenu(false) }} className="w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2"><Zap size={14}/> Re-clone</button>
+                    <button onClick={(e) => { e.stopPropagation(); onPin(); setMenu(false) }} className="w-full text-left px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                      <Pin size={14} className={voice.is_pinned ? "fill-gray-700" : ""} /> {voice.is_pinned ? 'Unpin' : 'Pin to Top'}
+                    </button>
                     <div className="h-px bg-gray-100 my-1"/>
-                    <button onClick={(e) => { e.stopPropagation(); onDelete(); setMenu(false) }} className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-2"><Trash2 size={14}/> Delete</button>
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(); setMenu(false) }} className="w-full text-left px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-2">
+                      <Trash2 size={14}/> Delete
+                    </button>
                   </motion.div>
                 )}
               </AnimatePresence>
+              </div>
             </div>
           </div>
 
@@ -175,9 +180,30 @@ export default function VoiceLibrary() {
   useEffect(() => { loadVoices() }, [search, visibility])
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Archive this voice profile?')) return
-    try { await voicesApi.delete(id); toast.success('Voice archived'); loadVoices() }
-    catch { toast.error('Failed to archive') }
+    if (!confirm('Delete this voice profile permanently?')) return
+    try { await voicesApi.delete(id); toast.success('Voice deleted'); loadVoices() }
+    catch { toast.error('Failed to delete') }
+  }
+
+  const handlePin = async (voice: any) => {
+    const isCurrentlyPinned = voice.is_pinned;
+    const pinnedCount = voices.filter(v => v.is_pinned).length;
+    
+    if (!isCurrentlyPinned && pinnedCount >= 3) {
+      toast.error('Maximum of 3 profiles can be pinned.');
+      return;
+    }
+    
+    try {
+      await voicesApi.update(voice.id, { 
+        is_pinned: !isCurrentlyPinned,
+        pinned_at: !isCurrentlyPinned ? new Date().toISOString() : null 
+      });
+      toast.success(isCurrentlyPinned ? 'Profile unpinned' : 'Profile pinned to top');
+      loadVoices();
+    } catch {
+      toast.error('Failed to update pin status');
+    }
   }
 
   return (
@@ -255,7 +281,8 @@ export default function VoiceLibrary() {
               <VoiceCard key={v.id} voice={v}
                 onDelete={() => handleDelete(v.id)}
                 onGenerate={() => navigate(`/generate?voice=${v.id}`)}
-                onClone={() => navigate(`/clone?voice=${v.id}`)} />
+                onClone={() => navigate(`/clone?voice=${v.id}`)}
+                onPin={() => handlePin(v)} />
             ))}
           </AnimatePresence>
         </motion.div>

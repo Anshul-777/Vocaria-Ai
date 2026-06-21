@@ -1,5 +1,5 @@
 """Vocaria Generation Router — Sync + Async endpoints"""
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, func
 from pydantic import BaseModel
@@ -48,6 +48,7 @@ class GenerationRequest(BaseModel):
 @router.post("/", status_code=201)
 async def generate_speech(
     body: GenerationRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -87,15 +88,16 @@ async def generate_speech(
     await db.commit()
     await db.refresh(job)
 
-    # Try Celery first; fall back to sync if Celery/Redis unavailable
+    # Use background tasks locally to avoid Celery/Redis dependency
     try:
-        from app.workers.generation_tasks import run_generation_task
-        task = run_generation_task.delay(job_id=job.id, user_id=current_user.id)
-        job.celery_task_id = task.id
+        from app.workers.generation_tasks import _run_generation_async
+        background_tasks.add_task(_run_generation_async, None, job.id, current_user.id)
+        import uuid
+        job.celery_task_id = f"local-{uuid.uuid4()}"
         await db.commit()
         return {"job_id": job.id, "status": "queued", "character_count": len(text)}
     except Exception as e:
-        logger.warning(f"Celery unavailable ({e}), running sync generation")
+        logger.warning(f"Background task fallback failed ({e}), running sync generation")
         # Fall through to sync generation
         return await _run_sync_generation(job, current_user, body, db)
 

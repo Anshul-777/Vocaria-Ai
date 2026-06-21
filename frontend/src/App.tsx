@@ -39,6 +39,7 @@ const ApiDocsPage = lazy(() => import('./pages/api_docs/ApiDocsPage'))
 const BenchmarksPage = lazy(() => import('./pages/benchmarks/BenchmarksPage'))
 const QualityPage = lazy(() => import('./pages/quality/QualityPage'))
 const AdminPage = lazy(() => import('./pages/admin/AdminPage'))
+const StudioPage = lazy(() => import('./pages/studio/StudioPage'))
 
 function Loader() {
   const [show, setShow] = React.useState(false)
@@ -185,6 +186,7 @@ export default function App() {
             <Route path="/benchmarks" element={<BenchmarksPage />} />
             <Route path="/quality" element={<QualityPage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/studio" element={<StudioPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

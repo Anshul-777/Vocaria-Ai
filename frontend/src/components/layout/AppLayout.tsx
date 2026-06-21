@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Mic2, Wand2, Shield, Globe, BarChart3, CreditCard, History,
   Bell, FileText, Settings, LogOut, Menu, X, User,
-  Zap, Search, Plus, Activity, FlaskConical, Star, Gauge, HelpCircle, Bot
+  Zap, Search, Plus, Activity, FlaskConical, Star, Gauge, HelpCircle, Bot, Video
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuthStore } from '@/store/authStore'
@@ -19,6 +19,7 @@ const NAV_SECTIONS = [
     title: 'Create',
     items: [
       { label: 'Voice Profiles', icon: Mic2, path: '/voices', hoverColor: 'hover:text-green-600', hoverBg: 'hover:bg-green-50' },
+      { label: 'Voice Studio', icon: Video, path: '/studio', tag: 'NEW', hoverColor: 'hover:text-red-600', hoverBg: 'hover:bg-red-50' },
       { label: 'Generate Voice', icon: Wand2, path: '/generate', tag: 'HOT', hoverColor: 'hover:text-orange-600', hoverBg: 'hover:bg-orange-50' },
       { label: 'Clone Voice', icon: Zap, path: '/clone', hoverColor: 'hover:text-purple-600', hoverBg: 'hover:bg-purple-50' },
       { label: 'Vocaria Agent', icon: Bot, path: '/agent', tag: 'AI', hoverColor: 'hover:text-indigo-600', hoverBg: 'hover:bg-indigo-50' },
@@ -264,6 +265,7 @@ export default function AppLayout() {
             { label: 'Analysis', path: '/analytics', color: 'bg-[#eab308]' },
             { label: 'Clone', path: '/clone', color: 'bg-[#8b5cf6]' },
             { label: 'Detection', path: '/detection', color: 'bg-[#ef4444]' },
+            { label: 'Studio', path: '/studio', color: 'bg-[#f43f5e]' },
             { label: 'Community', path: '/hub', color: 'bg-[#ec4899]' },
             { label: 'Models', path: '/benchmarks', color: 'bg-[#f97316]' },
           ].map(link => (

@@ -3,8 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Mic2, Shield, Wand2, Globe, Activity, Zap, ArrowRight, Plus,
-  TrendingUp, Clock, CheckCircle, AlertTriangle, Users
-, Gauge} from 'lucide-react'
+  TrendingUp, Clock, CheckCircle, AlertTriangle, Users, Gauge, Video
+} from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 import { analyticsApi, hubApi } from '@/api/client'
 import { ProgressBar, Spinner } from '@/components/ui/index'
@@ -19,7 +19,7 @@ const QUICK_ACTIONS = [
   { icon: Shield, label: 'Detect Deepfake', desc: 'Upload file for analysis', path: '/detection', color: 'from-red-500 to-orange-500' },
   { icon: Activity, label: 'Live Detection', desc: 'Real-time microphone', path: '/detection/live', color: 'from-emerald-400 to-teal-500' },
   { icon: Globe, label: 'Voice Hub', desc: 'Browse community voices', path: '/hub', color: 'from-cyan-400 to-blue-500' },
-  { icon: Plus, label: 'New Voice', desc: 'Create voice profile', path: '/voices', color: 'from-amber-400 to-yellow-500' },
+  { icon: Video, label: 'Studio', desc: 'Create audio formats', path: '/studio', color: 'from-amber-400 to-yellow-500' },
 ]
 
 export default function Dashboard() {

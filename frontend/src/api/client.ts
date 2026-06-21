@@ -90,13 +90,14 @@ export const voicesApi = {
     api.post(`/voices/${id}/comments`, null, { params: { content } }).then(r => r.data),
   getComments: (id: string) => api.get(`/voices/${id}/comments`).then(r => r.data),
   getModels: (id: string) => api.get(`/voices/${id}/models`).then(r => r.data),
+  updateModel: (id: string, modelId: string, data: any) => api.put(`/voices/${id}/models/${modelId}`, data).then(r => r.data),
   attachGeneration: (id: string, jobId: string) => 
     api.post(`/voices/${id}/attach_generation`, { job_id: jobId }).then(r => r.data),
 }
 
 // ─── Cloning ─────────────────────────────────────────────────────────────────
 export const cloningApi = {
-  startJob: (d: { voice_profile_id: string; mode: string; fine_tune_steps?: number }) =>
+  startJob: (d: { voice_profile_id: string; mode: string; fine_tune_steps?: number; test_phrase?: string; exaggeration?: number; cfg_weight?: number; temperature?: number; }) =>
     api.post('/cloning/start', d).then(r => r.data),
   getJob: (id: string) => api.get(`/cloning/${id}`).then(r => r.data),
   listJobs: (params?: any) => api.get('/cloning/', { params }).then(r => r.data),
@@ -151,6 +152,11 @@ export const hubApi = {
   getVoice: (id: string) => api.get(`/hub/voices/${id}`).then(r => r.data),
   featured: () => api.get('/hub/featured').then(r => r.data),
   stats: () => api.get('/hub/stats').then(r => r.data),
+  playVoice: (id: string) => api.post(`/hub/voices/${id}/play`).then(r => r.data),
+  likeVoice: (id: string) => api.post(`/hub/voices/${id}/like`).then(r => r.data),
+  saveVoice: (id: string) => api.post(`/hub/voices/${id}/save`).then(r => r.data),
+  getSaved: () => api.get('/hub/saved').then(r => r.data),
+  getLikes: () => api.get('/hub/likes').then(r => r.data),
 }
 
 // ─── Plans ───────────────────────────────────────────────────────────────────
@@ -228,6 +234,12 @@ export const orgsApi = {
 export const agentApi = {
   enhancePrompt: (prompt: string) => api.post('/agent/prompt/enhance', { prompt }).then(r => r.data),
   enhancePhrase: (phrase: string) => api.post('/agent/phrase/enhance', { phrase }).then(r => r.data),
+}
+
+export const studioApi = {
+  autoProfile: (formData: FormData) => api.post('/studio/auto-profile', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(r => r.data),
 }
 
 export const getErrorMessage = (err: unknown): string => {
