@@ -341,7 +341,7 @@ export default function HubPage() {
           ))}
         </div>
       ) : filteredVoices.length === 0 ? (
-        <EmptyState icon={<Globe size={32} />} title={viewSavedOnly ? "No saved voices" : "No voices found"} description={viewSavedOnly ? "You haven't saved any voices yet." : "Try adjusting your filters or search query"} />
+        <EmptyState icon={Globe} title={viewSavedOnly ? "No saved voices" : "No voices found"} description={viewSavedOnly ? "You haven't saved any voices yet." : "Try adjusting your filters or search query"} />
       ) : (
         <>
           <StaggerGroup className="flex flex-col" style={{ gap: 12, display: 'flex', flexDirection: 'column' }}>
