@@ -38,7 +38,7 @@ def run_detection_task(
     Run deepfake detection on an uploaded audio file.
     Downloads from storage, runs pipeline, saves results to DB.
     """
-    return asyncio.get_event_loop().run_until_complete(
+    return asyncio.run(
         _run_detection_async(
             task=self,
             job_id=job_id,

@@ -487,11 +487,7 @@ export default function DetectionLab() {
               <div className="card rounded-2xl p-5">
                 <div className="text-sm font-700 text-surface-800 mb-4">Per-Model Scores</div>
                 <div className="space-y-3">
-                  <ModelScoreBar name="AASIST" score={result.model_scores?.aasist} />
-                  <ModelScoreBar name="RawNet2" score={result.model_scores?.rawnet2} />
-                  <ModelScoreBar name="Prosodic" score={result.model_scores?.prosodic} />
-                  <ModelScoreBar name="Spectral" score={result.model_scores?.spectral} />
-                  <ModelScoreBar name="Glottal" score={result.model_scores?.glottal} />
+                  <ModelScoreBar name="Wav2Vec2" score={result.ensemble_confidence} />
                 </div>
               </div>
 

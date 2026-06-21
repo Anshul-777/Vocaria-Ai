@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(bind=True, name="quality.analyze_sample")
 def analyze_sample_quality(self, sample_id: str, storage_key: str):
-    return asyncio.get_event_loop().run_until_complete(_analyze(sample_id, storage_key))
+    return asyncio.run(_analyze(sample_id, storage_key))
 
 async def _analyze(sample_id: str, storage_key: str):
     from app.database import SessionLocal

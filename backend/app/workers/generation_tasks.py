@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 @celery_app.task(bind=True, name="generation.run", max_retries=2, soft_time_limit=1800)
 def run_generation_task(self, job_id: str, user_id: str):
-    return asyncio.get_event_loop().run_until_complete(_run_gen_async(self, job_id, user_id))
+    return asyncio.run(_run_gen_async(self, job_id, user_id))
 
 async def _run_gen_async(task, job_id, user_id):
     from app.database import SessionLocal
