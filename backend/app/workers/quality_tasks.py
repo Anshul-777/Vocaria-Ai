@@ -19,7 +19,15 @@ async def _analyze(sample_id: str, storage_key: str):
     try:
         storage = await get_storage()
         content = await storage.download(settings.BUCKET_SAMPLES, storage_key)
-        audio, sr = sf.read(io.BytesIO(content))
+        try:
+            audio, sr = sf.read(io.BytesIO(content))
+        except Exception:
+            from pydub import AudioSegment
+            seg = AudioSegment.from_file(io.BytesIO(content))
+            seg = seg.set_channels(1)
+            audio = np.array(seg.get_array_of_samples(), dtype=np.float32) / 32768.0
+            sr = seg.frame_rate
+
         if audio.ndim > 1:
             audio = audio.mean(axis=1)
         audio = audio.astype(np.float32)
