@@ -35,6 +35,7 @@ class DetectionStartResponse(BaseModel):
 
 
 class DetectionResultResponse(BaseModel):
+    model_config = {'protected_namespaces': ()}
     job_id: str
     status: str
     verdict: Optional[str]
