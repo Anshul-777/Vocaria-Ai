@@ -182,6 +182,7 @@ function ClonedTab({ user }: { user: any }) {
         </div>
       ))}
     </div>
+  );
 }
 
 function AssignProfileModal({ job, onClose, onAssigned }: { job: any, onClose: () => void, onAssigned: () => void }) {
