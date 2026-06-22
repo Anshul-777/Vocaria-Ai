@@ -976,22 +976,48 @@ async def get_history(
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     from datetime import timedelta
+    def clean_error(err: str):
+        if not err:
+            return err
+        if "sqlalchemy" in err.lower() or "asyncpg" in err.lower() or "invalid input" in err.lower():
+            return "Internal processing error."
+        if len(err) > 80:
+            return err[:77] + "..."
+        return err
+
     items = []
     if not job_type or job_type == "generation":
-        res = await db.execute(select(GenerationJob).where(GenerationJob.user_id == current_user.id).order_by(desc(GenerationJob.created_at)).limit(page_size))
-        for j in res.scalars().all():
-            items.append({"type": "generation", "id": j.id, "status": j.status, "summary": j.text[:80],
-                          "language": j.language, "duration_seconds": j.duration_seconds, "created_at": j.created_at, "error_message": j.error_message})
+        res = await db.execute(
+            select(GenerationJob, VoiceProfile.name)
+            .outerjoin(VoiceProfile, GenerationJob.voice_profile_id == VoiceProfile.id)
+            .where(GenerationJob.user_id == current_user.id)
+            .order_by(desc(GenerationJob.created_at))
+            .limit(page_size)
+        )
+        for j, vp_name in res.all():
+            summary = j.text[:80] + "..." if j.text and len(j.text) > 80 else j.text
+            if not summary or str(summary).endswith(".wav") or str(summary).endswith(".mp3"):
+                summary = f"Generated Speech ({vp_name or 'Default Voice'})"
+            else:
+                summary = f"TTS ({vp_name or 'Default Voice'}): {summary}"
+            items.append({"type": "generation", "id": j.id, "status": j.status, "summary": summary,
+                          "language": j.language, "duration_seconds": j.duration_seconds, "created_at": j.created_at, "error_message": clean_error(j.error_message)})
     if not job_type or job_type == "detection":
         res = await db.execute(select(DetectionJob).where(DetectionJob.user_id == current_user.id).order_by(desc(DetectionJob.created_at)).limit(page_size))
         for j in res.scalars().all():
-            items.append({"type": "detection", "id": j.id, "status": j.status, "verdict": j.verdict,
-                          "confidence": j.ensemble_confidence, "filename": j.original_filename, "created_at": j.created_at, "error_message": j.error_message})
+            items.append({"type": "detection", "id": j.id, "status": j.status, "summary": f"Analyzed Audio: {j.original_filename or 'Unknown File'}",
+                          "verdict": j.verdict, "confidence": j.ensemble_confidence, "filename": j.original_filename, "created_at": j.created_at, "error_message": clean_error(j.error_message)})
     if not job_type or job_type == "clone":
-        res = await db.execute(select(CloneJob).where(CloneJob.user_id == current_user.id).order_by(desc(CloneJob.created_at)).limit(page_size))
-        for j in res.scalars().all():
-            items.append({"type": "clone", "id": j.id, "status": j.status, "mode": j.mode,
-                          "quality_score": j.quality_score, "created_at": j.created_at, "error_message": j.error_message})
+        res = await db.execute(
+            select(CloneJob, VoiceProfile.name)
+            .outerjoin(VoiceProfile, CloneJob.voice_profile_id == VoiceProfile.id)
+            .where(CloneJob.user_id == current_user.id)
+            .order_by(desc(CloneJob.created_at))
+            .limit(page_size)
+        )
+        for j, vp_name in res.all():
+            items.append({"type": "clone", "id": j.id, "status": j.status, "summary": f"Trained Voice Profile: {vp_name or 'Unknown'}",
+                          "mode": j.mode, "quality_score": j.quality_score, "created_at": j.created_at, "error_message": clean_error(j.error_message)})
     if not job_type or job_type == "profile":
         res = await db.execute(select(VoiceProfile).where(VoiceProfile.owner_id == current_user.id, VoiceProfile.is_active == True).order_by(desc(VoiceProfile.created_at)).limit(page_size))
         for v in res.scalars().all():
@@ -1001,7 +1027,7 @@ async def get_history(
         res = await db.execute(select(StreamSession).where(StreamSession.user_id == current_user.id).order_by(desc(StreamSession.created_at)).limit(page_size))
         for s in res.scalars().all():
             status = "completed" if s.status == "completed" or s.ended_at else "processing"
-            items.append({"type": "live", "id": s.id, "status": status, "summary": f"Live {s.session_type} session",
+            items.append({"type": "live", "id": s.id, "status": status, "summary": f"Live {s.session_type.capitalize()} Session",
                           "duration_seconds": s.duration_seconds, "verdict": s.current_verdict, "created_at": s.created_at})
     if not job_type or job_type == "quality":
         res = await db.execute(
@@ -1013,7 +1039,7 @@ async def get_history(
         )
         for q_rec, filename in res.all():
             items.append({
-                "type": "quality", "id": q_rec.id, "status": "completed", "summary": filename,
+                "type": "quality", "id": q_rec.id, "status": "completed", "summary": f"Quality Lab: {filename or 'Audio File'}",
                 "quality_score": (q_rec.quality_score / 100.0 if q_rec.quality_score > 1.0 else q_rec.quality_score), "created_at": q_rec.created_at
             })
     if not job_type or job_type == "agent":
@@ -1028,7 +1054,7 @@ async def get_history(
             status = "completed" if i != 2 else "failed"
             duration = 45.0 + i * 35.0
             items.append({
-                "type": "agent", "id": f"agent-{i}", "status": status, "summary": f"Call with {name}",
+                "type": "agent", "id": f"agent-{i}", "status": status, "summary": f"Agent Interaction: {name}",
                 "duration_seconds": duration, "messages_count": 8 + i * 4, "created_at": dt,
                 "error_message": "Session handshake timed out" if status == "failed" else None
             })

@@ -266,8 +266,8 @@ export function HistoryPage() {
                               {item.type === 'agent' && `Duration: ${item.duration_seconds?.toFixed(0)}s`}
                             </span>
                             {item.status === 'failed' && item.error_message && (
-                              <span className="text-rose-600 text-[10px] font-600 mt-1 flex items-center gap-1 bg-rose-50 border border-rose-100 rounded px-2 py-0.5 w-fit">
-                                <AlertTriangle size={9} /> {item.error_message}
+                              <span className="text-rose-600 text-[10px] font-600 mt-1 flex items-center gap-1 bg-rose-50 border border-rose-100 rounded px-2 py-0.5 w-fit max-w-full overflow-hidden text-ellipsis whitespace-nowrap" title={item.error_message}>
+                                <AlertTriangle size={9} className="shrink-0" /> <span className="truncate">{item.error_message}</span>
                               </span>
                             )}
                           </div>
