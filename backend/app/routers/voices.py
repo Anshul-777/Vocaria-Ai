@@ -317,7 +317,8 @@ async def list_voice_models(voice_id: str, current_user: User = Depends(get_curr
             "quality_score": m.quality_score,
             "is_active": m.is_active,
             "is_public": getattr(m, "is_public", False),
-            "created_at": m.created_at
+            "created_at": m.created_at,
+            "prompt_text": getattr(m, "prompt_text", None)
         })
         
     for c in clone_jobs:

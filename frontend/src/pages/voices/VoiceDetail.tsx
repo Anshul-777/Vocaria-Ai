@@ -254,7 +254,7 @@ export default function VoiceDetail() {
               </div>
 
               <div style={{ display: 'flex', gap: 6, background: 'var(--bg-2)', padding: 6, borderRadius: 12, marginBottom: 20, overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-                {['All', 'Generated', 'Cloned', 'Detected', 'Live', 'Quality Lab'].map(t => (
+                {['All', 'Generated', 'Cloned', 'Detected'].map(t => (
                   <button key={t} onClick={() => setActiveTab(t)} style={{ flex: '1 0 auto', padding: '8px 16px', borderRadius: 8, fontSize: 12.5, fontWeight: 600, color: activeTab === t ? 'var(--blue)' : 'var(--fg-4)', background: activeTab === t ? 'var(--bg)' : 'transparent', border: 'none', cursor: 'pointer', boxShadow: activeTab === t ? '0 1px 3px rgba(0,0,0,0.05)' : 'none', transition: 'all 0.15s' }}>
                     {t}
                   </button>
@@ -263,7 +263,10 @@ export default function VoiceDetail() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {(() => {
-                  const combined = [...cloneJobs.map(j => ({ ...j, _category: 'Cloned' })), ...models.map(m => ({ ...m, _category: (m.source_type || 'Generated').replace('_', ' ') }))]
+                  const combined = [
+                    ...cloneJobs.map(j => ({ ...j, _category: 'Cloned' })), 
+                    ...models.filter(m => m.source_type !== 'cloned' && m.source_type !== 'clone').map(m => ({ ...m, _category: (m.source_type || 'Generated').replace('_', ' ') }))
+                  ]
                     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                     .filter(item => activeTab === 'All' || item._category.toLowerCase() === activeTab.toLowerCase());
 
@@ -276,13 +279,18 @@ export default function VoiceDetail() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                             <span className={`badge ${item._category === 'Cloned' ? 'badge-blue' : item._category === 'Detected' ? 'badge-amber' : 'badge-purple'}`} style={{ textTransform: 'capitalize' }}>{item._category}</span>
                             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-2)', textTransform: 'capitalize' }}>
-                              {item._category === 'Cloned' ? `Clone Job (${(item.mode || '').replace('_', ' ')})` : (item.name || 'Audio Clip')}
+                              {item._category === 'Cloned' ? `Clone Job (${(item.mode || '').replace('_', ' ')})` : (item._category === 'Generated' ? `Generated Audio (${(item.model_version || 'xtts_v2').replace('_', ' ')})` : (item.name || 'Audio Clip'))}
                             </div>
                           </div>
                           <div style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
                             {new Date(item.created_at).toLocaleDateString()}
                             {item.status && ` · Status: ${item.status}`}
                           </div>
+                          {item._category === 'Generated' && item.prompt_text && (
+                            <div style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 4, fontStyle: 'italic', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                              "{item.prompt_text}"
+                            </div>
+                          )}
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
