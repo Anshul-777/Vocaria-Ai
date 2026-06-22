@@ -1,7 +1,5 @@
 # Environments
 .env
-.env.*
-!.env.example
 .venv
 env/
 venv/
@@ -18,7 +16,6 @@ __pycache__/
 # Models and Cache
 /models/
 .cache/
-.pytest_cache/
 *.pt
 *.pth
 *.safetensors
@@ -40,25 +37,24 @@ build/
 *.sln
 *.swp
 
-# Storage & Temp files
+# Storage
 storage/
 tmp/
-*.tmp
-*.log
-*.db
-!dev.db
-hub_audio/
-
-# Test files and folders
 Test/
-test/
-tests/
-frontend/src/tests/
-backend/test_*.py
-test_*.py
-backend/temp_venv/
+Test/Kokoro_Outputs/
 
-# Junk & Docs
-*.md
-!README.md
-!LICENSE
+# Local Data
+*.db
+*.log
+*.tmp
+hub_audio/
+dev.db
+
+# Exclude unnecessary test files and extra md files
+huggingface_deployment.md
+test_*.py
+backend/test_*.py
+backend/hf_repo/
+backend/temp_venv/
+frontend/src/tests/
+backend/.env.huggingface
