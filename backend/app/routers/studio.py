@@ -16,7 +16,7 @@ from app.routers.auth import get_current_user
 from app.config import settings
 from app.services.auth_service import get_supabase_client
 
-studio_router = APIRouter(prefix="/studio", tags=["Studio"])
+studio_router = APIRouter(tags=["Studio"])
 
 def _extract_audio_from_url(url: str, output_path: str):
     import yt_dlp
