@@ -86,26 +86,33 @@ async def get_current_user(
     email = None
     full_name = None
 
-    # Try JWT first (via Supabase)
+    # Try JWT first (local or via Supabase)
     if token:
-        # We verify the token by fetching the user profile from Supabase API
-        headers = {
-            "apikey": settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_KEY,
-            "Authorization": f"Bearer {token}"
-        }
-        try:
-            resp = await _supabase_client.get(f"{settings.SUPABASE_URL}/auth/v1/user", headers=headers)
-            if resp.status_code == 200:
-                user_data = resp.json()
-                user_id = user_data.get("id")
-                email = user_data.get("email")
-                full_name = user_data.get("user_metadata", {}).get("full_name", "")
-            else:
-                logger.error(f"Supabase auth failed: {resp.status_code} {resp.text}")
-                credentials_exception.detail = f"Supabase auth failed: {resp.status_code} {resp.text}"
-        except Exception as e:
-            logger.error(f"Failed to verify Supabase token: {e}")
-            credentials_exception.detail = f"Failed to verify Supabase token: {str(e)}"
+        # First try to decode as a local JWT created by the backend
+        payload = decode_token(token)
+        if payload and "sub" in payload:
+            user_id = payload.get("sub")
+            email = payload.get("email")
+        else:
+            # Fall back to verifying via Supabase API (if it's a token issued directly by Supabase)
+            async with httpx.AsyncClient() as client:
+                headers = {
+                    "apikey": settings.SUPABASE_ANON_KEY or settings.SUPABASE_SERVICE_KEY,
+                    "Authorization": f"Bearer {token}"
+                }
+                try:
+                    resp = await client.get(f"{settings.SUPABASE_URL}/auth/v1/user", headers=headers, timeout=10.0)
+                    if resp.status_code == 200:
+                        user_data = resp.json()
+                        user_id = user_data.get("id")
+                        email = user_data.get("email")
+                        full_name = user_data.get("user_metadata", {}).get("full_name", "")
+                    else:
+                        logger.error(f"Supabase auth failed: {resp.status_code} {resp.text}")
+                        credentials_exception.detail = f"Supabase auth failed: {resp.status_code} {resp.text}"
+                except Exception as e:
+                    logger.error(f"Failed to verify Supabase token: {e}")
+                    credentials_exception.detail = f"Failed to verify Supabase token: {str(e)}"
     else:
         print("\n[AUTH DEBUG] No token provided in Authorization header!\n")
 
