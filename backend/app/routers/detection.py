@@ -532,12 +532,3 @@ async def update_detection_notes(job_id: str, notes: str, current_user: User = D
     await db.commit()
     return {"status": "success"}
 
-@router.post("/{job_id}/feedback")
-async def submit_detection_feedback(job_id: str, is_accurate: bool, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(DetectionJob).where(DetectionJob.id == job_id, DetectionJob.user_id == current_user.id))
-    job = result.scalar_one_or_none()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    job.user_feedback = is_accurate
-    await db.commit()
-    return {"status": "success"}

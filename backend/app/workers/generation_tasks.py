@@ -18,26 +18,26 @@ async def _run_gen_async(task, job_id, user_id):
     from sqlalchemy import select
     import uuid, os, tempfile
 
-    async with SessionLocal() as db:
-        result = await db.execute(select(GenerationJob).where(GenerationJob.id == job_id))
-        job = result.scalar_one_or_none()
-        if not job:
-            return
-        job.status = JobStatus.PROCESSING
-        job.started_at = datetime.now(timezone.utc)
-        await db.commit()
-
-        # Load job details
-        text = job.text
-        voice_id = job.voice_profile_id
-        language = job.language or "en"
-        emotion = job.emotion or "neutral"
-        speaking_style = job.speaking_style
-        speed = job.speed or 1.0
-        temperature = job.temperature or 0.7
-        output_format = job.output_format or "wav"
-
     try:
+        async with SessionLocal() as db:
+            result = await db.execute(select(GenerationJob).where(GenerationJob.id == job_id))
+            job = result.scalar_one_or_none()
+            if not job:
+                return
+            job.status = JobStatus.PROCESSING
+            job.started_at = datetime.now(timezone.utc)
+            await db.commit()
+
+            # Load job details
+            text = job.text
+            voice_id = job.voice_profile_id
+            language = job.language or "en"
+            emotion = job.emotion or "neutral"
+            speaking_style = job.speaking_style
+            speed = job.speed or 1.0
+            temperature = job.temperature or 0.7
+            output_format = job.output_format or "wav"
+
         from app.ml.tts_pipeline import get_pipeline
         # Get model from extra_metadata or default to kokoro
         model_name = "kokoro-82m"
@@ -89,15 +89,43 @@ async def _run_gen_async(task, job_id, user_id):
                 final_prompt += f" The speaker {', '.join(tag_actions)}."
 
         # Support prompt-based generation for ParlerTTS
-        kwargs = {
-            "text": final_text, "language": language,
-            "emotion": emotion, "speed": speed, "temperature": temperature, "output_format": output_format,
-            "gender": extra.get("gender", "female"),
-            "accent": extra.get("accent", "american"),
-            "age": extra.get("age", "young adult"),
-            "voice_id": extra.get("voice_preset"),
-            "voice_prompt": final_prompt
+        # Build kwargs per model type to avoid passing unsupported params
+        base_kwargs = {
+            "text": final_text,
+            "language": language,
+            "emotion": emotion,
+            "speed": speed,
+            "temperature": temperature,
+            "output_format": output_format,
         }
+
+        # Add model-specific extra kwargs
+        if model_name in ("kokoro-82m", "kokoro"):
+            kwargs = {
+                **base_kwargs,
+                "gender": extra.get("gender", "female"),
+                "accent": extra.get("accent", "american"),
+                "age": extra.get("age", "young adult"),
+                "voice_id": extra.get("voice_preset"),
+            }
+        elif model_name == "chatterbox-turbo":
+            kwargs = {
+                **base_kwargs,
+                "voice_id": extra.get("voice_preset"),
+                "voice_prompt": final_prompt,
+            }
+        elif model_name == "parler-tts":
+            kwargs = {
+                "text": final_text,
+                "output_format": output_format,
+                "voice_prompt": final_prompt,
+            }
+        else:
+            kwargs = {
+                **base_kwargs,
+                "voice_id": extra.get("voice_preset"),
+                "voice_prompt": final_prompt,
+            }
 
         
         audio_bytes, sr = await tts.synthesize(**kwargs)

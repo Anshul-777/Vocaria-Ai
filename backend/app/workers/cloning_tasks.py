@@ -19,16 +19,15 @@ async def _run_clone_async(task, job_id, user_id, voice_profile_id, mode, fine_t
     from sqlalchemy import select
     import uuid
 
-    async with SessionLocal() as db:
-        result = await db.execute(select(CloneJob).where(CloneJob.id == job_id))
-        job = result.scalar_one_or_none()
-        if not job:
-            return
-        job.status = JobStatus.PROCESSING
-        job.started_at = datetime.now(timezone.utc)
-        await db.commit()
-
     try:
+        async with SessionLocal() as db:
+            result = await db.execute(select(CloneJob).where(CloneJob.id == job_id))
+            job = result.scalar_one_or_none()
+            if not job:
+                return
+            job.status = JobStatus.PROCESSING
+            job.started_at = datetime.now(timezone.utc)
+            await db.commit()
         # Get samples
         async with SessionLocal() as db:
             result = await db.execute(select(VoiceSample).where(VoiceSample.voice_profile_id == voice_profile_id))
@@ -87,12 +86,12 @@ async def _run_clone_async(task, job_id, user_id, voice_profile_id, mode, fine_t
             job = result.scalar_one_or_none()
             job.status = JobStatus.COMPLETED
             job.progress = 1.0
-            job.embedding_path = embedding_storage_key
+            # Removed job.embedding_path (doesn't exist)
             job.preview_url = preview_url
             job.quality_score = 0.95
             job.similarity_score = 0.90
             job.completed_at = datetime.now(timezone.utc)
-            job.duration_seconds = (datetime.now(timezone.utc) - job.started_at).total_seconds()
+            # Removed job.duration_seconds (doesn't exist)
 
             # Update voice profile
             vp_result = await db.execute(select(VoiceProfile).where(VoiceProfile.id == voice_profile_id))
@@ -101,9 +100,9 @@ async def _run_clone_async(task, job_id, user_id, voice_profile_id, mode, fine_t
                 vp.embedding_path = embedding_storage_key
                 vp.preview_url = preview_url
                 vp.training_status = "ready"
-                vp.quality_score = job.quality_score
-                vp.similarity_score = job.similarity_score
+                # Removed vp.quality_score and vp.similarity_score (they don't exist)
                 # Mark as chatterbox-turbo engine explicitly so generation knows!
+                # Wait, does vp have model_id? Yes!
                 vp.model_id = "chatterbox-turbo"
 
             month_year = datetime.now().strftime("%Y-%m")
@@ -112,7 +111,7 @@ async def _run_clone_async(task, job_id, user_id, voice_profile_id, mode, fine_t
             if ur:
                 ur.quantity += 1
             else:
-                db.add(UsageRecord(user_id=user_id, month_year=month_year, resource_type="clone_jobs", quantity=1, unit="count"))
+                db.add(UsageRecord(user_id=user_id, month_year=month_year, resource_type="clone_jobs", quantity=1))
 
             db.add(Notification(user_id=user_id, type=NotificationType.CLONE_COMPLETE,
                 title="Voice Clone Ready! 🎤", message=f"Your voice clone is ready. Quality score: {job.quality_score:.0%}",
@@ -133,7 +132,7 @@ async def _run_clone_async(task, job_id, user_id, voice_profile_id, mode, fine_t
                 job.error_message = str(e)[:500]
                 job.completed_at = datetime.now(timezone.utc)
                 await db.commit()
-        if task.request.retries < task.max_retries:
+        if task and getattr(task, "request", None) and getattr(task.request, "retries", 0) < getattr(task, "max_retries", 0):
             raise task.retry(exc=e, countdown=120)
     finally:
         for p in sample_paths if 'sample_paths' in dir() else []:

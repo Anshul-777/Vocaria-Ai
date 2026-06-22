@@ -1,13 +1,28 @@
 import asyncio
-from app.database import SessionLocal
-from sqlalchemy import select
-from app.models import GenerationJob
+from app.database import engine
+from sqlalchemy import text
 
-async def f():
-    async with SessionLocal() as db:
-        res = await db.execute(select(GenerationJob).order_by(GenerationJob.created_at.desc()).limit(3))
-        jobs = res.scalars().all()
-        for j in jobs:
-            print(f"ID: {j.id}, Status: {j.status}, Processing Time: {j.duration_seconds}, Created: {j.created_at}, Completed: {j.completed_at}")
+async def check_db():
+    async with engine.begin() as conn:
+        result = await conn.execute(text("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'generation_jobs';
+        """))
+        cols = result.fetchall()
+        print("generation_jobs:")
+        for c in cols:
+            print("  ", c[0], c[1])
 
-asyncio.run(f())
+        result = await conn.execute(text("""
+            SELECT column_name, data_type 
+            FROM information_schema.columns 
+            WHERE table_name = 'voice_profiles';
+        """))
+        cols = result.fetchall()
+        print("voice_profiles:")
+        for c in cols:
+            print("  ", c[0], c[1])
+
+if __name__ == "__main__":
+    asyncio.run(check_db())

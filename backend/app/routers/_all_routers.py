@@ -105,12 +105,22 @@ async def get_clone_job(job_id: str, current_user: User = Depends(get_current_us
 @cloning_router.get("/")
 async def list_clone_jobs(
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
+    voice_profile_id: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
     q = select(CloneJob, VoiceProfile.name).outerjoin(
         VoiceProfile, CloneJob.voice_profile_id == VoiceProfile.id
-    ).where(CloneJob.user_id == current_user.id).order_by(desc(CloneJob.created_at))
+    ).where(CloneJob.user_id == current_user.id)
+    
+    if voice_profile_id:
+        q = q.where(CloneJob.voice_profile_id == voice_profile_id)
+        
+    q = q.order_by(desc(CloneJob.created_at))
+    
     total_q = select(func.count()).select_from(CloneJob).where(CloneJob.user_id == current_user.id)
+    if voice_profile_id:
+        total_q = total_q.where(CloneJob.voice_profile_id == voice_profile_id)
+        
     total = (await db.execute(total_q)).scalar()
     result = await db.execute(q.offset((page-1)*page_size).limit(page_size))
     
@@ -1330,7 +1340,7 @@ from fastapi.responses import FileResponse
 import os
 from app.config import settings
 
-@uploads_router.api_route("/serve/{bucket}/{key:path}", methods=["GET", "HEAD"])
+@uploads_router.get("/serve/{bucket}/{key:path}")
 async def serve_file(bucket: str, key: str):
     import os
     from app.config import settings

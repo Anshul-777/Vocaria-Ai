@@ -41,21 +41,13 @@ import sys
 is_celery = any("celery" in arg.lower() for arg in sys.argv)
 
 # Create async engine
-if settings.DATABASE_URL.startswith("sqlite") or is_celery:
-    engine = create_async_engine(
-        settings.DATABASE_URL,
-        echo=settings.DATABASE_ECHO,
-        poolclass=NullPool,
-    )
-else:
-    engine = create_async_engine(
-        settings.DATABASE_URL,
-        pool_size=settings.DATABASE_POOL_SIZE,
-        max_overflow=settings.DATABASE_MAX_OVERFLOW,
-        echo=settings.DATABASE_ECHO,
-        pool_pre_ping=True,
-        pool_recycle=3600,
-    )
+# For Supabase PgBouncer (session mode) with multiple workers, NullPool is safer
+# to prevent connection limit exhaustion as it immediately closes connections
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    echo=settings.DATABASE_ECHO,
+    poolclass=NullPool,
+)
 
 # Session factory
 SessionLocal = async_sessionmaker(

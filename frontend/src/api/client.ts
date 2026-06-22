@@ -5,7 +5,7 @@ const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
-  timeout: 60000,
+  timeout: 180000,
   headers: { 'Content-Type': 'application/json' },
 })
 

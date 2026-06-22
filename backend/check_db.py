@@ -1,11 +1,17 @@
 import asyncio
-from app.database import SessionLocal
-from sqlalchemy import select
-from app.models import GenerationJob
+import asyncpg
+import json
 
-async def f():
-    async with SessionLocal() as db:
-        res = await db.execute(select(GenerationJob).order_by(GenerationJob.created_at.desc()).limit(3))
-        print([(j.id, j.status.value if hasattr(j.status, 'value') else j.status, j.error_message) for j in res.scalars()])
+async def check():
+    conn = await asyncpg.connect('REDACTED_DB_URL')
+    rows = await conn.fetch('SELECT id, status, error_message, extra_metadata FROM generation_jobs ORDER BY created_at DESC LIMIT 3')
+    for r in rows:
+        print("ID:", r['id'])
+        print("Status:", r['status'])
+        print("Error:", r['error_message'])
+        print("Metadata:", r['extra_metadata'])
+        print("---")
+    await conn.close()
 
-asyncio.run(f())
+if __name__ == "__main__":
+    asyncio.run(check())

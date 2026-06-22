@@ -104,9 +104,11 @@ async def create_voice_profile(
     db.add(AuditLog(user_id=current_user.id, action=AuditAction.VOICE_CREATE,
                     resource_type="voice_profile", details={"name": body.name}))
     await db.commit()
-    await db.refresh(profile)
-    # Prevent lazy-load error for a new profile
-    setattr(profile, "models", [])
+    
+    from sqlalchemy.orm import selectinload
+    result = await db.execute(select(VoiceProfile).options(selectinload(VoiceProfile.models)).where(VoiceProfile.id == profile.id))
+    profile = result.scalar_one()
+    
     return voice_to_dict(profile)
 
 
@@ -218,7 +220,7 @@ async def add_comment(
     if len(content.strip()) < 1 or len(content) > 2000:
         raise HTTPException(400, "Comment must be 1-2000 characters")
     comment = VoiceComment(voice_profile_id=voice_id, user_id=current_user.id,
-                           content=content.strip(), parent_id=parent_id)
+                           content=content.strip())
     db.add(comment)
     await db.commit()
     await db.refresh(comment)
@@ -230,7 +232,7 @@ async def list_comments(voice_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(VoiceComment, User.username, User.display_name, User.avatar_url)
         .join(User, VoiceComment.user_id == User.id)
-        .where(VoiceComment.voice_profile_id == voice_id, VoiceComment.is_deleted == False, VoiceComment.parent_id == None)
+        .where(VoiceComment.voice_profile_id == voice_id)
         .order_by(desc(VoiceComment.created_at))
     )
     rows = result.all()
@@ -318,7 +320,7 @@ async def list_voice_models(voice_id: str, current_user: User = Depends(get_curr
         combined.append({
             "id": c.id,
             "source_type": "cloned",
-            "model_version": c.model_version,
+            "model_version": getattr(c, "mode", "xtts_v2") or "xtts_v2",
             "training_status": "ready",
             "preview_url": c.preview_url,
             "quality_score": c.quality_score,
@@ -368,3 +370,4 @@ async def update_voice_model(
         
     await db.commit()
     return {"status": "success", "is_public": getattr(m, 'is_public', False), "is_active": getattr(m, 'is_active', True)}
+

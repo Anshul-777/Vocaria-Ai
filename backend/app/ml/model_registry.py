@@ -13,18 +13,44 @@ class ModelRegistry:
     async def initialize(self):
         """Pre-warm key models."""
         try:
-            # Skip pre-warming detection models when detection feature is disabled
+            # Pre-warm detection models
             from app.config import settings
-            if not settings.FEATURE_DETECTION:
-                logger.info("Feature detection disabled; skipping model pre-warm")
-                return
+            if settings.FEATURE_DETECTION:
+                from app.ml.detection_pipeline import get_detection_pipeline
+                pipeline = get_detection_pipeline()
+                await pipeline.ensure_loaded()
+                if pipeline.deepfake_classifier:
+                    self._models['deepfake_classifier'] = pipeline.deepfake_classifier
+                    self._versions['deepfake_classifier'] = "garystafford/wav2vec2-deepfake-voice-detector"
+                if pipeline.squim_objective:
+                    self._models['squim_objective'] = pipeline.squim_objective
+                    self._versions['squim_objective'] = "torchaudio.SQUIM_OBJECTIVE"
+                logger.info("Detection models pre-warmed")
 
-            from app.ml.detection_pipeline import get_detection_pipeline
-            pipeline = get_detection_pipeline()
-            for det in pipeline.detectors:
-                self._models[det.name] = det
-                self._versions[det.name] = det.version
-            logger.info(f"Registered {len(self._models)} detection models")
+            # Pre-warm TTS models
+            from app.ml.tts_pipeline import get_tts_pipeline, get_chatterbox_pipeline, get_parler_pipeline
+            tts = get_tts_pipeline()
+            await tts.ensure_loaded()
+            self._models['kokoro'] = tts._pipeline
+            self._versions['kokoro'] = "hexgrad/Kokoro-82M"
+            
+            try:
+                chatterbox = get_chatterbox_pipeline()
+                await chatterbox.ensure_loaded()
+                self._models['chatterbox'] = chatterbox._model
+                self._versions['chatterbox'] = "chatterbox-turbo"
+            except Exception as e:
+                logger.warning(f"Failed to pre-warm chatterbox: {e}")
+
+            try:
+                parler = get_parler_pipeline()
+                await parler.ensure_loaded()
+                self._models['parler_tts'] = parler._model
+                self._versions['parler_tts'] = "parler-tts/parler-tts-mini-v1"
+            except Exception as e:
+                logger.warning(f"Failed to pre-warm parler-tts: {e}")
+                
+            logger.info(f"Registered {len(self._models)} models total")
         except Exception as e:
             logger.warning(f"Model pre-warm failed: {e}")
 

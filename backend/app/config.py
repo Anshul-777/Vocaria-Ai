@@ -26,8 +26,8 @@ class Settings(BaseSettings):
 
     # ── Database ─────────────────────────────────────────────────────────────
     DATABASE_URL: str = "postgresql+asyncpg://voicecrafter:voicecrafter@localhost:5432/voicecrafter"
-    DATABASE_POOL_SIZE: int = 20
-    DATABASE_MAX_OVERFLOW: int = 10
+    DATABASE_POOL_SIZE: int = 5
+    DATABASE_MAX_OVERFLOW: int = 5
     DATABASE_ECHO: bool = False
 
     SUPABASE_URL: str = ""

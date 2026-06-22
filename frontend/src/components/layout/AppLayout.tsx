@@ -9,7 +9,7 @@ import {
 import clsx from 'clsx'
 import { useAuthStore } from '@/store/authStore'
 import { supabase } from '@/lib/supabase'
-import api from '@/api/client'
+import api, { notificationsApi } from '@/api/client'
 import { VocariaLogo } from '@/components/ui/VocariaLogo'
 
 const NAV_SECTIONS = [
@@ -85,13 +85,12 @@ export default function AppLayout() {
       const { data: userData } = await supabase.auth.getUser()
       if (!userData?.user) return
 
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', userData.user.id)
-        .eq('is_read', false)
-
-      setUnreadCount(count || 0)
+      try {
+        const res = await notificationsApi.list({ unread_only: true })
+        setUnreadCount(res.unread_count || 0)
+      } catch (err) {
+        console.error("Failed to fetch notifications:", err)
+      }
     }
     fetchUnread()
   }, [location.pathname])

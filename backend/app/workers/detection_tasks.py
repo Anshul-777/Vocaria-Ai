@@ -64,21 +64,21 @@ async def _run_detection_async(
     from app.utils.storage import get_storage
     from app.ml.detection_pipeline import get_detection_pipeline
 
-    async with SessionLocal() as db:
-        from sqlalchemy import select
-        result = await db.execute(select(DetectionJob).where(DetectionJob.id == job_id))
-        job = result.scalar_one_or_none()
-
-        if not job:
-            logger.error(f"Detection job {job_id} not found")
-            return
-
-        job.status = JobStatus.PROCESSING
-        job.started_at = datetime.now(timezone.utc)
-        await db.commit()
-
     tmp_path = None
     try:
+        async with SessionLocal() as db:
+            from sqlalchemy import select
+            result = await db.execute(select(DetectionJob).where(DetectionJob.id == job_id))
+            job = result.scalar_one_or_none()
+
+            if not job:
+                logger.error(f"Detection job {job_id} not found")
+                return
+
+            job.status = JobStatus.PROCESSING
+            job.started_at = datetime.now(timezone.utc)
+            await db.commit()
+
         # Download file from storage
         storage = await get_storage()
         audio_bytes = await storage.download(settings.BUCKET_UPLOADS, storage_key)

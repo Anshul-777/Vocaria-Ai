@@ -381,10 +381,20 @@ class QualityAnalysis(Base):
     __tablename__ = "quality_analyses"
     id = Column(String, primary_key=True, default=generate_uuid)
     file_id = Column(String, ForeignKey("uploaded_files.id", ondelete="CASCADE"), nullable=False)
+    storage_key = Column(String, nullable=True)
+    duration_seconds = Column(Float, nullable=True)
+    sample_rate = Column(Integer, nullable=True)
+    channels = Column(Integer, nullable=True)
+    format = Column(String, nullable=True)
+    snr_db = Column(Float, nullable=True)
+    rms_db = Column(Float, nullable=True)
+    peak_db = Column(Float, nullable=True)
+    speech_ratio = Column(Float, nullable=True)
     quality_score = Column(Float, nullable=False)
     snr = Column(Float, nullable=True)
     clipping_ratio = Column(Float, nullable=True)
     background_noise_level = Column(Float, nullable=True)
+    issues = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
 
 class StreamSession(Base):

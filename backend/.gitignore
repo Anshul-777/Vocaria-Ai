@@ -1,0 +1,6 @@
+dev.db
+test.db
+.venv/
+venv/
+__pycache__/
+.env

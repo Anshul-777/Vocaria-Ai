@@ -88,17 +88,14 @@ async def generate_speech(
     await db.commit()
     await db.refresh(job)
 
-    # Use background tasks locally to avoid Celery/Redis dependency
     try:
-        from app.workers.generation_tasks import _run_gen_async
-        import asyncio
-        asyncio.create_task(_run_gen_async(None, job.id, current_user.id))
-        import uuid
-        job.celery_task_id = f"local-{uuid.uuid4()}"
+        from app.workers.generation_tasks import run_generation_task
+        task = run_generation_task.delay(job.id, current_user.id)
+        job.celery_task_id = task.id
         await db.commit()
         return {"job_id": job.id, "status": "queued", "character_count": len(text)}
     except Exception as e:
-        logger.warning(f"Background task fallback failed ({e}), running sync generation")
+        logger.warning(f"Celery task failed to queue ({e}), running sync generation")
         # Fall through to sync generation
         return await _run_sync_generation(job, current_user, body, db)
 

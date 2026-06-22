@@ -156,7 +156,10 @@ class TTSPipeline:
 
     def _load_model(self):
         """Load Kokoro pipeline (blocking, run in executor)."""
-        from kokoro import KPipeline
+        try:
+            from kokoro import KPipeline
+        except ImportError:
+            from kokoro.pipeline import KPipeline  # fallback
 
         # Default to American English
         lang_code = "a"
@@ -439,7 +442,11 @@ class ChatterboxPipeline:
             dtype = torch.float32
 
         try:
-            from chatterbox.tts import ChatterboxTTS
+            # Try Turbo first (0.1.7+), fallback to original (0.1.5, 0.1.6)
+            try:
+                from chatterbox.tts_turbo import ChatterboxTurboTTS as ChatterboxTTS
+            except ImportError:
+                from chatterbox.tts import ChatterboxTTS
             self._model = ChatterboxTTS.from_pretrained(device=self._device)
             self.sample_rate = self._model.sr
             logger.info(f"Chatterbox Turbo loaded (device={self._device}, sr={self.sample_rate})")
@@ -480,13 +487,21 @@ class ChatterboxPipeline:
         def _generate():
             with torch.inference_mode():
                 try:
-                    wav = self._model.generate(
-                        text,
-                        audio_prompt_path=speaker_wav,
-                        exaggeration=exaggeration,
-                        cfg_weight=cfg_weight,
-                        temperature=temperature,
-                    )
+                    # Handle both ChatterboxTTS and ChatterboxTurboTTS APIs
+                    try:
+                        wav = self._model.generate(
+                            text,
+                            audio_prompt_path=speaker_wav,
+                            exaggeration=exaggeration,
+                            cfg_weight=cfg_weight,
+                            temperature=temperature,
+                        )
+                    except TypeError:
+                        # Original API (0.1.5, 0.1.6) - fewer params
+                        gen_kwargs = {}
+                        if speaker_wav:
+                            gen_kwargs["audio_prompt_path"] = speaker_wav
+                        wav = self._model.generate(text, **gen_kwargs)
                     audio_np = wav.squeeze().cpu().numpy().astype(np.float32)
                     return audio_np
                 finally:
