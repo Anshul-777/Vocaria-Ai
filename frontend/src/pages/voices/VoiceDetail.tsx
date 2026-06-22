@@ -265,7 +265,10 @@ export default function VoiceDetail() {
                 {(() => {
                   const combined = [
                     ...cloneJobs.map(j => ({ ...j, _category: 'Cloned' })), 
-                    ...models.filter(m => m.source_type !== 'cloned' && m.source_type !== 'clone').map(m => ({ ...m, _category: (m.source_type || 'Generated').replace('_', ' ') }))
+                    ...models.filter(m => m.source_type !== 'cloned' && m.source_type !== 'clone').map(m => {
+                      const st = m.source_type || 'Generated';
+                      return { ...m, _category: (st.charAt(0).toUpperCase() + st.slice(1)).replace('_', ' ') };
+                    })
                   ]
                     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                     .filter(item => activeTab === 'All' || item._category.toLowerCase() === activeTab.toLowerCase());
