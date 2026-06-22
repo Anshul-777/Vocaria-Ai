@@ -182,18 +182,117 @@ function ClonedTab({ user }: { user: any }) {
         </div>
       ))}
     </div>
+}
+
+function AssignProfileModal({ job, onClose, onAssigned }: { job: any, onClose: () => void, onAssigned: () => void }) {
+  const [profiles, setProfiles] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  
+  const [mode, setMode] = useState<'existing'|'new'>('new')
+  const [selectedProfileId, setSelectedProfileId] = useState('')
+  const [newProfileName, setNewProfileName] = useState('')
+
+  useEffect(() => {
+    voicesApi.list({ limit: 100 })
+      .then(d => {
+        setProfiles(d.items || [])
+        if (d.items && d.items.length > 0) {
+          setSelectedProfileId(d.items[0].id)
+        }
+      })
+      .catch(e => toast.error(getErrorMessage(e)))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleSubmit = async () => {
+    setSaving(true)
+    try {
+      let targetProfileId = selectedProfileId
+      if (mode === 'new') {
+        if (!newProfileName.trim()) {
+          toast.error("Profile name is required")
+          setSaving(false)
+          return
+        }
+        const created = await voicesApi.create({
+          name: newProfileName,
+          description: "Created from generation job",
+          visibility: "private",
+          language: job.language || "en",
+          emotion_tags: job.emotion ? [job.emotion] : []
+        })
+        targetProfileId = created.id
+      }
+      
+      await voicesApi.attachGeneration(targetProfileId, job.id)
+      toast.success("Generation successfully assigned to profile!")
+      onAssigned()
+    } catch (e) {
+      toast.error(getErrorMessage(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-gray-900">Save as Profile</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">&times;</button>
+        </div>
+        <div className="p-6">
+          {loading ? (
+            <div className="flex justify-center"><Spinner /></div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button onClick={() => setMode('new')} className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-colors ${mode === 'new' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>New Profile</button>
+                <button onClick={() => setMode('existing')} className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-colors ${mode === 'existing' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>Existing Profile</button>
+              </div>
+
+              {mode === 'new' ? (
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Profile Name</label>
+                  <input type="text" value={newProfileName} onChange={e => setNewProfileName(e.target.value)} placeholder="e.g. My Custom Bella" className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--purple)]/20 focus:border-[var(--purple)] transition-all" />
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Select Profile</label>
+                  <select value={selectedProfileId} onChange={e => setSelectedProfileId(e.target.value)} className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[var(--purple)]/20 focus:border-[var(--purple)] transition-all">
+                    {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+              )}
+              
+              <button disabled={saving} onClick={handleSubmit} className="w-full mt-4 bg-[var(--purple)] hover:bg-[var(--purple-hover)] text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                {saving ? <Spinner className="w-4 h-4" /> : < Bookmark size={16} />}
+                {saving ? "Saving..." : "Save Profile"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
 function GeneratedTab() {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [assigningJob, setAssigningJob] = useState<any>(null)
 
-  useEffect(() => {
+  const fetchJobs = () => {
+    setLoading(true)
     generationApi.list()
       .then(d => setItems(d.jobs || []))
       .catch(e => toast.error(getErrorMessage(e)))
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    fetchJobs()
   }, [])
 
   if (loading) return <div className="p-8 text-center"><Spinner /></div>
@@ -203,7 +302,7 @@ function GeneratedTab() {
   }
 
   const grouped = items.reduce((acc: any, item: any) => {
-    const pName = item.voice_profile_name || 'Unknown Profile';
+    const pName = item.voice_profile_name || 'Unsaved / Default Voices';
     if (!acc[pName]) acc[pName] = [];
     acc[pName].push(item);
     return acc;
@@ -211,6 +310,13 @@ function GeneratedTab() {
 
   return (
     <div className="space-y-8">
+      {assigningJob && (
+        <AssignProfileModal 
+          job={assigningJob} 
+          onClose={() => setAssigningJob(null)} 
+          onAssigned={() => { setAssigningJob(null); fetchJobs() }} 
+        />
+      )}
       {Object.entries(grouped).map(([profileName, profileItems]: [string, any]) => (
         <div key={profileName} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="bg-gray-50/80 px-6 py-4 border-b border-gray-100 flex items-center justify-between">
@@ -242,7 +348,14 @@ function GeneratedTab() {
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm font-bold text-gray-900 capitalize">{item.emotion || 'Standard'}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-bold text-gray-900 capitalize">{item.emotion || 'Standard'}</div>
+                      {profileName === 'Unsaved / Default Voices' && (
+                        <button onClick={() => setAssigningJob(item)} className="text-[10px] bg-[var(--purple)]/10 text-[var(--purple)] hover:bg-[var(--purple)]/20 px-2 py-0.5 rounded font-bold transition-colors uppercase">
+                          Save Voice
+                        </button>
+                      )}
+                    </div>
                     <div className="text-xs font-medium text-gray-500 mt-0.5">
                       {item.duration_seconds?.toFixed(1)}s • {item.character_count} chars
                     </div>

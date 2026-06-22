@@ -279,6 +279,7 @@ async def attach_generation(voice_id: str, body: AttachGenerationRequest, curren
         quality_score=0.96
     )
     db.add(model)
+    job.voice_profile_id = voice_id
     await db.commit()
     
     result = await db.execute(select(VoiceProfile).options(selectinload(VoiceProfile.models)).where(VoiceProfile.id == voice_id))

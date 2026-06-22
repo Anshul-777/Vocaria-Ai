@@ -379,17 +379,37 @@ async def list_generation_jobs(
     total = (await db.execute(select(func.count()).select_from(GenerationJob).where(GenerationJob.user_id == current_user.id))).scalar()
     result = await db.execute(q.offset((page-1)*page_size).limit(page_size))
     
-    return {"total": total, "jobs": [{
-        "id": j.id, "status": j.status, "language": j.language,
-        "text": j.text[:50] + ("..." if len(j.text) > 50 else ""),
-        "model": (j.extra_metadata or {}).get("model", "kokoro-82m") if getattr(j, "extra_metadata", None) else "kokoro-82m",
-        "emotion": j.emotion, "voice_profile_id": j.voice_profile_id,
-        "voice_profile_name": p_name or "Unknown Profile",
-        "speaking_style": j.speaking_style,
-        "character_count": j.character_count, "duration_seconds": j.duration_seconds,
-        "output_format": j.output_format, "created_at": j.created_at,
-        "output_url": j.output_url
-    } for j, p_name in result.all()]}
+    rows = result.all()
+    storage = None
+    if total > 0:
+        try:
+            storage = await get_storage()
+        except Exception:
+            pass
+
+    jobs_response = []
+    for j, p_name in rows:
+        url = j.output_url
+        if not url and j.output_storage_key and j.status == JobStatus.COMPLETED and storage:
+            try:
+                url = await storage.presigned_url(settings.BUCKET_OUTPUTS, j.output_storage_key, expires_hours=24)
+            except Exception:
+                pass
+                
+        jobs_response.append({
+            "id": j.id, "status": j.status, "language": j.language,
+            "text": j.text[:50] + ("..." if len(j.text) > 50 else ""),
+            "model": (j.extra_metadata or {}).get("model", "kokoro-82m") if getattr(j, "extra_metadata", None) else "kokoro-82m",
+            "emotion": j.emotion, "voice_profile_id": j.voice_profile_id,
+            "voice_profile_name": p_name or "Unknown Profile",
+            "speaking_style": j.speaking_style,
+            "character_count": j.character_count, "duration_seconds": j.duration_seconds,
+            "output_format": j.output_format, "created_at": j.created_at,
+            "output_url": url,
+            "voice_preset": (j.extra_metadata or {}).get("voice_preset") if getattr(j, "extra_metadata", None) else None
+        })
+    
+    return {"total": total, "jobs": jobs_response}
 
 
 # ── Model capabilities endpoint ─────────────────────────────────────────────
