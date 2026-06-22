@@ -14,7 +14,7 @@ __pycache__/
 *.pyo
 
 # Models and Cache
-models/
+/models/
 .cache/
 *.pt
 *.pth
@@ -49,3 +49,6 @@ test_chatterbox_direct.py
 *.log
 *.tmp
 hub_audio/
+
+dev.db
+
