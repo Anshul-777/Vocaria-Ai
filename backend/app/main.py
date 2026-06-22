@@ -277,3 +277,9 @@ async def root():
         "docs": "/api/docs",
         "health": "/health",
     }
+
+@app.get('/debug/supabase')
+async def debug_supabase():
+    from app.config import settings
+    return {'url': settings.SUPABASE_URL}
+
