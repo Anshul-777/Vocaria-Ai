@@ -283,3 +283,9 @@ async def debug_supabase():
     from app.config import settings
     return {'url': settings.SUPABASE_URL}
 
+
+@app.get('/debug/env')
+async def debug_env():
+    import os
+    return {k: v[:5] + '...' for k, v in os.environ.items() if k.startswith('SUPABASE')}
+
