@@ -33,12 +33,12 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan - startup and shutdown events."""
-    logger.info("🚀 Vocaria Platform starting up...")
+    logger.info("Vocaria Platform starting up...")
 
     # Initialize database tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    logger.info("✅ Database tables initialized")
+    logger.info("Database tables initialized")
 
     # Initialize model registry (best-effort)
     try:
@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
         registry = ModelRegistry()
         await registry.initialize()
         app.state.model_registry = registry
-        logger.info("✅ ML Model Registry initialized")
+        logger.info(" ML Model Registry initialized")
     except Exception as e:
         logger.warning(f"ML Model Registry initialization failed: {e}")
 
@@ -55,7 +55,7 @@ async def lifespan(app: FastAPI):
         from app.utils.redis_client import get_redis
         redis = await get_redis()
         app.state.redis = redis
-        logger.info("✅ Redis connection established")
+        logger.info(" Redis connection established")
     except Exception as e:
         logger.warning(f"Redis initialization failed: {e}")
 
@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
         storage = StorageBackend()
         await storage.ensure_buckets()
         app.state.storage = storage
-        logger.info("✅ Storage backend ready")
+        logger.info(" Storage backend ready")
     except Exception as e:
         logger.warning(f"Storage backend initialization failed: {e}")
 
@@ -74,20 +74,20 @@ async def lifespan(app: FastAPI):
         from app.workers.scheduler import start_scheduler
         scheduler = start_scheduler()
         app.state.scheduler = scheduler
-        logger.info("✅ Background scheduler started")
+        logger.info(" Background scheduler started")
     except Exception as e:
         logger.warning(f"Scheduler start failed: {e}")
 
-    logger.info("🎙️ Vocaria Platform is LIVE")
+    logger.info("️ Vocaria Platform is LIVE")
     yield
 
     # Shutdown
-    logger.info("🛑 Vocaria shutting down...")
+    logger.info(" Vocaria shutting down...")
     if hasattr(app.state, 'scheduler'):
         app.state.scheduler.shutdown()
     if hasattr(app.state, 'redis'):
         await app.state.redis.close()
-    logger.info("✅ Shutdown complete")
+    logger.info(" Shutdown complete")
 
 
 app = FastAPI(

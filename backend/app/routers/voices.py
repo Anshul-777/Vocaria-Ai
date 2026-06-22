@@ -105,6 +105,8 @@ async def create_voice_profile(
                     resource_type="voice_profile", details={"name": body.name}))
     await db.commit()
     await db.refresh(profile)
+    # Prevent lazy-load error for a new profile
+    setattr(profile, "models", [])
     return voice_to_dict(profile)
 
 
@@ -160,7 +162,7 @@ async def update_voice(
     voice_id: str, body: VoiceProfileUpdate,
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(VoiceProfile).where(VoiceProfile.id == voice_id, VoiceProfile.owner_id == current_user.id))
+    result = await db.execute(select(VoiceProfile).options(selectinload(VoiceProfile.models)).where(VoiceProfile.id == voice_id, VoiceProfile.owner_id == current_user.id))
     v = result.scalar_one_or_none()
     if not v:
         raise HTTPException(404, "Voice not found")
@@ -168,7 +170,9 @@ async def update_voice(
         setattr(v, field, val)
     v.updated_at = datetime.now(timezone.utc)
     await db.commit()
-    await db.refresh(v)
+    
+    result = await db.execute(select(VoiceProfile).options(selectinload(VoiceProfile.models)).where(VoiceProfile.id == voice_id))
+    v = result.scalar_one_or_none()
     return voice_to_dict(v)
 
 
@@ -237,7 +241,7 @@ class AttachGenerationRequest(BaseModel):
 
 @router.post("/{voice_id}/attach_generation")
 async def attach_generation(voice_id: str, body: AttachGenerationRequest, current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(VoiceProfile).where(VoiceProfile.id == voice_id, VoiceProfile.owner_id == current_user.id))
+    result = await db.execute(select(VoiceProfile).options(selectinload(VoiceProfile.models)).where(VoiceProfile.id == voice_id, VoiceProfile.owner_id == current_user.id))
     v = result.scalar_one_or_none()
     if not v:
         raise HTTPException(404, "Voice profile not found")
@@ -270,7 +274,9 @@ async def attach_generation(voice_id: str, body: AttachGenerationRequest, curren
     )
     db.add(model)
     await db.commit()
-    await db.refresh(v)
+    
+    result = await db.execute(select(VoiceProfile).options(selectinload(VoiceProfile.models)).where(VoiceProfile.id == voice_id))
+    v = result.scalar_one_or_none()
     return voice_to_dict(v)
 
 

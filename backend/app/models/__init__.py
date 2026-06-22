@@ -22,6 +22,21 @@ class AuditAction(str, enum.Enum):
     GENERATE_AUDIO = "generate_audio"
     CLONE_VOICE = "clone_voice"
     DETECT_AUDIO = "detect_audio"
+    
+    # Missing actions that caused 500 AttributeErrors:
+    VOICE_CREATE = "voice_create"
+    VOICE_DELETE = "voice_delete"
+    GENERATION_START = "generation_start"
+    GENERATION_COMPLETE = "generation_complete"
+    CLONE_START = "clone_start"
+    CLONE_COMPLETE = "clone_complete"
+    DETECTION_START = "detection_start"
+    DETECTION_COMPLETE = "detection_complete"
+    EVIDENCE_EXPORT = "evidence_export"
+    PLAN_CHANGE = "plan_change"
+    API_KEY_CREATE = "api_key_create"
+    API_KEY_REVOKE = "api_key_revoke"
+    PROFILE_UPDATE = "profile_update"
 
 class JobStatus(str, enum.Enum):
     QUEUED = "queued"
@@ -131,6 +146,8 @@ class AuditLog(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     action = Column(SQLEnum(AuditAction), nullable=False)
+    resource_type = Column(String, nullable=True)
+    resource_id = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
     details = Column(JSON, nullable=True)
