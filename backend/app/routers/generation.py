@@ -372,19 +372,24 @@ async def list_generation_jobs(
     page: int = Query(1, ge=1), page_size: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db),
 ):
-    q = select(GenerationJob).where(GenerationJob.user_id == current_user.id).order_by(desc(GenerationJob.created_at))
-    total = (await db.execute(select(func.count()).select_from(q.subquery()))).scalar()
+    q = select(GenerationJob, VoiceProfile.name).outerjoin(
+        VoiceProfile, GenerationJob.voice_profile_id == VoiceProfile.id
+    ).where(GenerationJob.user_id == current_user.id).order_by(desc(GenerationJob.created_at))
+    
+    total = (await db.execute(select(func.count()).select_from(GenerationJob).where(GenerationJob.user_id == current_user.id))).scalar()
     result = await db.execute(q.offset((page-1)*page_size).limit(page_size))
-    jobs = result.scalars().all()
+    
     return {"total": total, "jobs": [{
         "id": j.id, "status": j.status, "language": j.language,
         "text": j.text[:50] + ("..." if len(j.text) > 50 else ""),
-        "model": (j.extra_metadata or {}).get("model", "kokoro-82m"),
+        "model": (j.extra_metadata or {}).get("model", "kokoro-82m") if getattr(j, "extra_metadata", None) else "kokoro-82m",
         "emotion": j.emotion, "voice_profile_id": j.voice_profile_id,
+        "voice_profile_name": p_name or "Unknown Profile",
         "speaking_style": j.speaking_style,
         "character_count": j.character_count, "duration_seconds": j.duration_seconds,
         "output_format": j.output_format, "created_at": j.created_at,
-    } for j in jobs]}
+        "output_url": j.output_url
+    } for j, p_name in result.all()]}
 
 
 # ── Model capabilities endpoint ─────────────────────────────────────────────

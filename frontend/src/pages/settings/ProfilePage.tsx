@@ -6,7 +6,7 @@ import {
   MapPin, Link as LinkIcon, Calendar, CheckCircle2, 
   Globe2, Lock, Shield, Wand2, Activity, Bookmark, Bot, Pencil, Trash2
 } from 'lucide-react'
-import { usersApi, voicesApi, generationApi, detectionApi, getErrorMessage } from '@/api/client'
+import { usersApi, voicesApi, generationApi, detectionApi, cloningApi, getErrorMessage } from '@/api/client'
 import { Reveal, PlanBadge, Spinner, WaveBars } from '@/components/ui/shared'
 import { useAuthStore } from '@/store/authStore'
 import toast from 'react-hot-toast'
@@ -98,13 +98,9 @@ function ClonedTab({ user }: { user: any }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    voicesApi.list()
+    cloningApi.listJobs()
       .then(d => {
-         const all = d.voices || [];
-         setItems(all.filter((v: any) => 
-            v.training_status !== 'empty' && 
-            v.is_synthetic === false
-         ));
+         setItems(d.jobs || []);
       })
       .catch(e => toast.error(getErrorMessage(e)))
       .finally(() => setLoading(false))
@@ -116,17 +112,74 @@ function ClonedTab({ user }: { user: any }) {
     return <EmptyTabState icon={Mic2} title="No Cloned Voices" desc="You haven't successfully cloned any voices yet. Only playable cloned voices appear here." />
   }
 
+  const grouped = items.reduce((acc: any, item: any) => {
+    const pName = item.voice_profile_name || 'Unknown Profile';
+    if (!acc[pName]) acc[pName] = [];
+    acc[pName].push(item);
+    return acc;
+  }, {});
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {items.map(item => (
-        <VoiceCard 
-          key={item.id} 
-          voice={item} 
-          onDelete={() => {}} 
-          onGenerate={() => navigate('/generate?voice=' + item.id)} 
-          onClone={() => navigate('/clone?voice=' + item.id)} 
-          onPin={() => {}}
-        />
+    <div className="space-y-8">
+      {Object.entries(grouped).map(([profileName, profileItems]: [string, any]) => (
+        <div key={profileName} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-gray-50/80 px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Mic2 size={18} className="text-[var(--blue)]" />
+              {profileName}
+            </h3>
+            <span className="text-xs font-medium bg-gray-200/50 text-gray-600 px-2 py-1 rounded-full">
+              {profileItems.length} {profileItems.length === 1 ? 'Job' : 'Jobs'}
+            </span>
+          </div>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50/30 border-b border-gray-100">
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest w-[300px]">Preview Audio</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Details</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Status / Score</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest text-right">Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {profileItems.map((item: any) => (
+                <tr key={item.id} className="hover:bg-gray-50/50 transition-colors group">
+                  <td className="px-6 py-4">
+                    {item.preview_url ? (
+                      <audio controls src={item.preview_url} style={{ width: '100%', height: 36, outline: 'none' }} />
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">No audio preview</div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-bold text-gray-900 capitalize">{item.mode?.replace('_', ' ') || 'Standard'}</div>
+                    <div className="text-xs font-medium text-gray-500 mt-0.5">
+                      Progress: {Math.round(item.progress * 100)}%
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 rounded text-xs font-bold capitalize ${
+                        item.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                        item.status === 'failed' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        {item.status}
+                      </span>
+                    </div>
+                    {item.quality_score ? (
+                      <div className="text-xs font-bold text-gray-500 mt-1">
+                        Score: {(item.quality_score * 100).toFixed(0)} / 100
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-6 py-4 text-right text-sm font-medium text-gray-500">
+                    {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ))}
     </div>
   )
@@ -149,45 +202,64 @@ function GeneratedTab() {
     return <EmptyTabState icon={Wand2} title="No Audio Generated" desc="You haven't generated any audio tracks yet. Head over to the generator to get started!" />
   }
 
+  const grouped = items.reduce((acc: any, item: any) => {
+    const pName = item.voice_profile_name || 'Unknown Profile';
+    if (!acc[pName]) acc[pName] = [];
+    acc[pName].push(item);
+    return acc;
+  }, {});
+
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
-      <table className="w-full text-left border-collapse">
-        <thead>
-          <tr className="bg-gray-50/50 border-b border-gray-100">
-            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Audio Snippet</th>
-            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Details</th>
-            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Format / Lang</th>
-            <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest text-right">Date</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-100">
-          {items.map(item => (
-            <tr key={item.id} className="hover:bg-gray-50/50 transition-colors group">
-              <td className="px-6 py-4">
-                <div className="flex items-center gap-4">
-                  <button className="h-8 w-8 bg-black text-white rounded-full flex items-center justify-center shrink-0 shadow hover:scale-105 transition-transform">
-                    <Play size={12} fill="currentColor" className="ml-0.5" />
-                  </button>
-                  <WaveBars color="var(--blue)" bars={8} height={16} active={false} />
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <div className="text-sm font-bold text-gray-900">{item.emotion || 'Standard'}</div>
-                <div className="text-xs font-medium text-gray-500">
-                  {item.duration_seconds?.toFixed(1)}s • {item.character_count} chars
-                </div>
-              </td>
-              <td className="px-6 py-4">
-                <div className="text-sm font-medium text-gray-600 uppercase">{item.output_format}</div>
-                <div className="text-xs font-semibold text-gray-400 mt-0.5 uppercase">{item.language}</div>
-              </td>
-              <td className="px-6 py-4 text-right text-sm font-medium text-gray-500">
-                {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-8">
+      {Object.entries(grouped).map(([profileName, profileItems]: [string, any]) => (
+        <div key={profileName} className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-gray-50/80 px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Wand2 size={18} className="text-[var(--purple)]" />
+              {profileName}
+            </h3>
+            <span className="text-xs font-medium bg-gray-200/50 text-gray-600 px-2 py-1 rounded-full">
+              {profileItems.length} {profileItems.length === 1 ? 'Track' : 'Tracks'}
+            </span>
+          </div>
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50/30 border-b border-gray-100">
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest w-[300px]">Audio Track</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Details</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest">Format / Lang</th>
+                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-widest text-right">Date</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {profileItems.map((item: any) => (
+                <tr key={item.id} className="hover:bg-gray-50/50 transition-colors group">
+                  <td className="px-6 py-4">
+                    {item.output_url ? (
+                      <audio controls src={item.output_url} style={{ width: '100%', height: 36, outline: 'none' }} />
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">No audio generated yet</div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-bold text-gray-900 capitalize">{item.emotion || 'Standard'}</div>
+                    <div className="text-xs font-medium text-gray-500 mt-0.5">
+                      {item.duration_seconds?.toFixed(1)}s • {item.character_count} chars
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-medium text-gray-600 uppercase">{item.output_format || 'wav'}</div>
+                    <div className="text-xs font-semibold text-gray-400 mt-0.5 uppercase">{item.language || 'en'}</div>
+                  </td>
+                  <td className="px-6 py-4 text-right text-sm font-medium text-gray-500">
+                    {formatDistanceToNow(new Date(item.created_at), { addSuffix: true })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </div>
   )
 }
