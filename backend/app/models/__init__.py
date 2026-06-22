@@ -24,6 +24,7 @@ class AuditAction(str, enum.Enum):
     DETECT_AUDIO = "detect_audio"
 
 class JobStatus(str, enum.Enum):
+    QUEUED = "queued"
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -178,6 +179,7 @@ class VoiceProfile(Base):
     preview_url = Column(String, nullable=True)
     training_status = Column(String, nullable=True)
     is_pinned = Column(Boolean, default=False)
+    pinned_at = Column(DateTime(timezone=True), nullable=True)
     consent_text = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=utcnow)
     updated_at = Column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
