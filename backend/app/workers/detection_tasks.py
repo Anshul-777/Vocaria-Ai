@@ -219,7 +219,7 @@ async def _run_detection_async(
             # Notify failure
             db.add(Notification(
                 user_id=user_id,
-                type=NotificationType.CLONE_FAILED,
+                type=NotificationType.ERROR,
                 title="Detection Failed",
                 message=f"Detection analysis failed: {str(exc)[:200]}",
                 action_url=f"/detection/{job_id}",

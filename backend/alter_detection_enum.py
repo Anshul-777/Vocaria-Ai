@@ -4,7 +4,8 @@ from app.database import engine
 
 async def main():
     verdicts = [
-        "authentic", "synthetic", "synthetic_tts", "suspicious", "inconclusive"
+        "authentic", "synthetic", "synthetic_tts", "suspicious", "inconclusive",
+        "AUTHENTIC", "SYNTHETIC", "SYNTHETIC_TTS", "SUSPICIOUS", "INCONCLUSIVE"
     ]
     async with engine.connect() as conn:
         conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
