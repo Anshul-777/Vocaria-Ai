@@ -140,13 +140,8 @@ export default function Register() {
     setLoading(false);
 
     if (error) {
-      // If Supabase hits an email sending limit or rate limit (common during testing),
-      // we still gracefully proceed to the OTP screen rather than breaking the UI.
-      if (error.message.toLowerCase().includes('email') || error.message.toLowerCase().includes('rate')) {
-        setIsEmailSent(true);
-      } else {
-        setError(error.message);
-      }
+      console.error("Supabase Auth Error:", error.message);
+      setError(error.message);
     } else {
       if (data.session) {
         navigate('/start');
