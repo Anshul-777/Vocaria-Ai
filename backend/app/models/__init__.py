@@ -55,9 +55,11 @@ class NotificationType(str, enum.Enum):
     QUOTA_WARNING = "quota_warning"
 
 class DetectionVerdict(str, enum.Enum):
-    REAL = "real"
-    FAKE = "fake"
-    UNCERTAIN = "uncertain"
+    AUTHENTIC = "authentic"
+    SYNTHETIC = "synthetic"
+    SYNTHETIC_TTS = "synthetic_tts"
+    SUSPICIOUS = "suspicious"
+    INCONCLUSIVE = "inconclusive"
 
 class PlanTier(str, enum.Enum):
     FREE = "free"
