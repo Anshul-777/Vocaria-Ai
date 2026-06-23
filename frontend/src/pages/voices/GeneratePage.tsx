@@ -118,7 +118,7 @@ export default function GeneratePage() {
       const items = data.jobs || data.items || data || []
       setRecentJobs(Array.isArray(items) ? items : [])
 
-      const active = (Array.isArray(items) ? items : []).find((j: any) => j.status === 'pending' || j.status === 'processing')
+      const active = (Array.isArray(items) ? items : []).find((j: any) => j.status === 'queued' || j.status === 'processing')
       if (active && !generating) {
         setJobId(active.id)
         if (active.model) setSelectedModel(active.model)

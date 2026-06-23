@@ -10,7 +10,7 @@ echo "Waiting for Redis to be ready..."
 sleep 2
 
 echo "Starting Celery worker..."
-celery -A app.workers.celery_app worker --loglevel=info --pool=solo &
+celery -A app.workers.celery_app worker -Q celery,generation,cloning,detection --loglevel=info --pool=solo &
 
 echo "Starting FastAPI server..."
 # Using the same command HF Spaces expects for Docker deployments

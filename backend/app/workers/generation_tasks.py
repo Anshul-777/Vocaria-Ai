@@ -160,9 +160,9 @@ async def _run_gen_async(task, job_id, user_id):
             if ur:
                 ur.quantity += len(text)
             else:
-                db.add(UsageRecord(user_id=user_id, month_year=month_year, resource_type="generation_chars", quantity=len(text), unit="characters"))
+                db.add(UsageRecord(user_id=user_id, month_year=month_year, resource_type="generation_chars", quantity=len(text)))
 
-            db.add(Notification(user_id=user_id, type=NotificationType.GENERATION_COMPLETE,
+            db.add(Notification(user_id=user_id, type=NotificationType.SUCCESS,
                 title="Generation Complete 🔊", message=f"Your {duration:.1f}s audio is ready.",
                 action_url=f"/history/generation/{job_id}"))
             await db.commit()

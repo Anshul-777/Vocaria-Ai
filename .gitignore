@@ -1,54 +1,4 @@
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Dependencies
-node_modules/
-__pycache__/
-*.pyc
-*.pyo
-
-# Models and Cache
-/models/
-.cache/
-*.pt
-*.pth
-*.safetensors
-*.onnx
-
-# Build and Dist
-dist/
-build/
-*.egg-info/
-.next/
-
-# IDE and OS
-.vscode/
-.idea/
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.swp
-
-# Storage
-storage/
-tmp/
-Test/
-Test/Kokoro_Outputs/
-test_chatterbox_direct.py
-
-# Local Data
-*.db
-*.log
-*.tmp
-# Environments
+﻿# Environments
 .env
 .venv
 env/
@@ -109,4 +59,14 @@ backend/test_*.py
 backend/hf_repo/
 backend/temp_venv/
 frontend/src/tests/
-backend/.env.huggingface
+backend/.env*
+backend/check_errors.py
+backend/check_pg_errors.py
+backend/drop_detection.py
+backend/perth.py
+backend/set_hf_secrets.py
+backend/upload_model_file.py
+*.sql
+skills-lock.json
+fix_multipart.py
+.env*

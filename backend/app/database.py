@@ -6,7 +6,6 @@ Async SQLAlchemy with PostgreSQL via asyncpg.
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, MappedColumn, mapped_column
 from sqlalchemy import MetaData, event
-from sqlalchemy.pool import NullPool
 import logging
 
 from app.config import settings
@@ -41,12 +40,13 @@ import sys
 is_celery = any("celery" in arg.lower() for arg in sys.argv)
 
 # Create async engine
-# For Supabase PgBouncer (session mode) with multiple workers, NullPool is safer
-# to prevent connection limit exhaustion as it immediately closes connections
+# Use QueuePool to strictly limit connections and prevent EMAXCONNSESSION
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DATABASE_ECHO,
-    poolclass=NullPool,
+    pool_size=max(1, settings.DATABASE_POOL_SIZE),
+    max_overflow=max(0, settings.DATABASE_MAX_OVERFLOW),
+    pool_timeout=30.0,
 )
 
 # Session factory

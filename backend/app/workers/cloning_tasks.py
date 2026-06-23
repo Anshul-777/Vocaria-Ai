@@ -113,7 +113,7 @@ async def _run_clone_async(task, job_id, user_id, voice_profile_id, mode, fine_t
             else:
                 db.add(UsageRecord(user_id=user_id, month_year=month_year, resource_type="clone_jobs", quantity=1))
 
-            db.add(Notification(user_id=user_id, type=NotificationType.CLONE_COMPLETE,
+            db.add(Notification(user_id=user_id, type=NotificationType.SUCCESS,
                 title="Voice Clone Ready! 🎤", message=f"Your voice clone is ready. Quality score: {job.quality_score:.0%}",
                 action_url=f"/voices/{voice_profile_id}"))
             db.add(AuditLog(user_id=user_id, action=AuditAction.CLONE_COMPLETE,

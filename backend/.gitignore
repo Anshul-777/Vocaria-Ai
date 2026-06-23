@@ -1,6 +1,10 @@
-dev.db
-test.db
+*.db
+*.sqlite
+*.sqlite3
+*.log
 .venv/
 venv/
+temp_venv/
 __pycache__/
 .env
+.env.*

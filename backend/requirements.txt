@@ -66,3 +66,4 @@ groq==0.11.0
 # TTS engines
 kokoro>=0.9.0
 parler-tts>=0.2.3
+s3tokenizer>=0.1.0

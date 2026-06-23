@@ -266,6 +266,5 @@ async def _update_usage(user_id: str, duration_seconds: float):
                 month_year=month_year,
                 resource_type="detection_minutes",
                 quantity=minutes,
-                unit="minutes",
             ))
         await db.commit()

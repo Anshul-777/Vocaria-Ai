@@ -273,7 +273,7 @@ async def _run_sync_generation(
         else:
             db.add(UsageRecord(
                 user_id=current_user.id, month_year=month_year,
-                resource_type="generation_chars", quantity=len(job.text), unit="characters"
+                resource_type="generation_chars", quantity=len(job.text)
             ))
 
         # Audit log completion
@@ -291,7 +291,7 @@ async def _run_sync_generation(
 
         # Notification
         db.add(Notification(
-            user_id=current_user.id, type=NotificationType.GENERATION_COMPLETE,
+            user_id=current_user.id, type=NotificationType.SUCCESS,
             title="Generation Complete 🔊",
             message=f"Your {duration:.1f}s audio is ready.",
             action_url=f"/history/generation/{job.id}"

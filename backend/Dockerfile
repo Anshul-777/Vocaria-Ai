@@ -14,6 +14,10 @@ RUN apt-get update && apt-get install -y \
 COPY ${REQUIREMENTS_FILE} .
 RUN pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
 
+# Chatterbox TTS installed separately with --no-deps to avoid transformers version conflict
+RUN pip install --no-cache-dir --no-deps chatterbox-tts>=0.1.7 \
+    && pip install --no-cache-dir s3tokenizer "resemble-perth>=1.0.0" conformer==0.3.2 spacy-pkuseg pykakasi==2.3.0 pyloudnorm diffusers==0.29.0 omegaconf safetensors gradio==6.8.0
+
 COPY . .
 
 # Copy and set permissions for start script
