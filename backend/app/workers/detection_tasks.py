@@ -181,15 +181,14 @@ async def _run_detection_async(
             is_alert = detection_result.is_synthetic
             db.add(Notification(
                 user_id=user_id,
-                type=NotificationType.DETECTION_ALERT if is_alert else NotificationType.GENERATION_COMPLETE,
+                type=NotificationType.WARNING if is_alert else NotificationType.SUCCESS,
                 title="Detection Complete" + (" ⚠️ Synthetic Audio Detected" if is_alert else " ✅ Audio Authentic"),
                 message=(
                     f"Analysis complete. Verdict: {detection_result.verdict.replace('_', ' ').title()}. "
                     f"Confidence: {detection_result.ensemble_confidence:.1%}. "
                     f"{'Suspicious segments found.' if detection_result.suspicious_segments else 'No suspicious segments.'}"
                 ),
-                action_url=f"/detection/{job_id}",
-                metadata={"job_id": job_id, "verdict": detection_result.verdict},
+                action_url=f"/detection/{job_id}"
             ))
             await db.commit()
 
