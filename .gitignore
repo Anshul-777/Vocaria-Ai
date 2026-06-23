@@ -42,12 +42,64 @@ storage/
 tmp/
 Test/
 Test/Kokoro_Outputs/
+test_chatterbox_direct.py
+
+# Local Data
+*.db
+*.log
+*.tmp
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+
+# Models and Cache
+/models/
+.cache/
+*.pt
+*.pth
+*.safetensors
+*.onnx
+
+# Build and Dist
+dist/
+build/
+*.egg-info/
+.next/
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Storage
+storage/
+tmp/
+Test/
+Test/Kokoro_Outputs/
+test_chatterbox_direct.py
 
 # Local Data
 *.db
 *.log
 *.tmp
 hub_audio/
+
 dev.db
 
 # Exclude unnecessary test files and extra md files
