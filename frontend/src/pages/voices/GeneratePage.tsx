@@ -900,7 +900,7 @@ export default function GeneratePage() {
                           background: job.status === 'completed' ? '#d1fae5' : job.status === 'failed' ? '#fee2e2' : '#fef3c7',
                           color: job.status === 'completed' ? '#059669' : job.status === 'failed' ? '#dc2626' : '#d97706'
                         }}>
-                          {job.status === 'processing' ? 'Processing...' : job.status === 'pending' ? 'Queued' : job.status === 'completed' ? 'Success' : 'Failed'}
+                          {job.status === 'processing' ? 'Processing...' : (job.status === 'pending' || job.status === 'queued') ? 'Queued' : job.status === 'completed' ? 'Success' : 'Failed'}
                         </span>
                         <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
                           {new Date(job.created_at).toLocaleString()}
