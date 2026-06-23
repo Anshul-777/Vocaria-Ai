@@ -100,7 +100,7 @@ async def _run_gen_async(task, job_id, user_id):
         }
 
         # Add model-specific extra kwargs
-        if model_name in ("kokoro-82m", "kokoro"):
+        if model_name.startswith("kokoro"):
             kwargs = {
                 **base_kwargs,
                 "gender": extra.get("gender", "female"),
@@ -108,7 +108,7 @@ async def _run_gen_async(task, job_id, user_id):
                 "age": extra.get("age", "young adult"),
                 "voice_id": extra.get("voice_preset"),
             }
-        elif model_name == "chatterbox-turbo":
+        elif model_name.startswith("chatterbox"):
             kwargs = {
                 **base_kwargs,
                 "voice_id": extra.get("voice_preset"),

@@ -617,8 +617,7 @@ class ParlerTTSPipeline:
             if self._device == "cuda":
                 self._model = ParlerTTSForConditionalGeneration.from_pretrained(
                     model_id,
-                    torch_dtype=torch.float16,
-                    low_cpu_mem_usage=True
+                    torch_dtype=torch.float16
                 ).to(self._device)
             else:
                 self._model = ParlerTTSForConditionalGeneration.from_pretrained(model_id).to(self._device)
@@ -744,8 +743,8 @@ def get_parler_pipeline() -> ParlerTTSPipeline:
 
 
 def get_pipeline(model_name: str = "kokoro-82m"):
-    if model_name == "chatterbox-turbo":
+    if model_name.startswith("chatterbox"):
         return get_chatterbox_pipeline()
-    elif model_name == "parler-tts":
+    elif model_name.startswith("parler-tts"):
         return get_parler_pipeline()
     return get_tts_pipeline()

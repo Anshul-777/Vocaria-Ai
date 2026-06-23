@@ -53,9 +53,13 @@ class VoiceModelUpdate(BaseModel):
     is_public: Optional[bool] = None
     is_active: Optional[bool] = None
 def voice_to_dict(v: VoiceProfile, current_user_id: str = None) -> dict:
-    active_model = next((m for m in getattr(v, "models", []) if m.is_active), None)
-    if not active_model and getattr(v, "models", []):
-        active_model = v.models[0] # Fallback to first if none active
+    from sqlalchemy.orm.attributes import instance_state
+    state = instance_state(v)
+    models_list = state.dict.get("models", [])
+    
+    active_model = next((m for m in models_list if m.is_active), None)
+    if not active_model and models_list:
+        active_model = models_list[0] # Fallback to first if none active
 
     return {
         "id": v.id, "name": v.name, "description": v.description,

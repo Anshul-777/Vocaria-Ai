@@ -44,7 +44,7 @@ class AudioDetectionPipeline:
     def __init__(self):
         self._loaded = False
         self._loading = False
-        self._device = settings.DEVICE
+        self._device = settings.DEVICE if torch.cuda.is_available() and settings.DEVICE == "cuda" else "cpu"
 
         # Models
         self.diarization_pipeline = None
@@ -117,7 +117,8 @@ class AudioDetectionPipeline:
             audio_np = librosa.resample(audio_np, orig_sr=sr, target_sr=self.df_sample_rate)
         
         # Pass raw audio array to transformers pipeline
-        results = self.deepfake_classifier(audio_np)
+        # Some pipelines require dict format with sampling_rate
+        results = self.deepfake_classifier({"raw": audio_np, "sampling_rate": self.df_sample_rate})
         
         # Results look like: [{'score': 0.99, 'label': 'FAKE'}, {'score': 0.01, 'label': 'REAL'}]
         probs = {"real": 0.0, "ai_generated": 0.0}
@@ -286,7 +287,13 @@ class AudioDetectionPipeline:
             # Fallback if no speakers found and NO diarization model
             if not speakers and self.diarization_pipeline is None:
                 audio_np = waveform.squeeze().cpu().numpy()
-                probs = self._get_deepfake_score(audio_np, sr)
+                if len(audio_np.shape) == 0:
+                    audio_np = np.expand_dims(audio_np, 0)
+                
+                if len(audio_np) > int(0.2 * sr):
+                    probs = self._get_deepfake_score(audio_np, sr)
+                else:
+                    probs = {"real": 0.5, "ai_generated": 0.5, "edited": 0.0}
                 speakers.append({
                     "id": "Speaker A",
                     "probabilities": probs,
@@ -434,7 +441,13 @@ class AudioDetectionPipeline:
                     
                     segment_waveform = waveform[:, start_sample:end_sample]
                     audio_np = segment_waveform.squeeze().cpu().numpy()
-                    probs = self._get_deepfake_score(audio_np, sr)
+                    if len(audio_np.shape) == 0:
+                        audio_np = np.expand_dims(audio_np, 0)
+                    
+                    if len(audio_np) > int(0.2 * sr):
+                        probs = self._get_deepfake_score(audio_np, sr)
+                    else:
+                        probs = {"real": 0.5, "ai_generated": 0.5, "edited": 0.0}
                     
                     speakers.append({
                         "id": speaker,
