@@ -105,7 +105,7 @@ export default function BenchmarksPage() {
       <Reveal>
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-2">
           <div>
-            <div className="flex items-center gap-3"><Star className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-600 to-pink-500 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>Benchmarks</h1></div>
+            <div className="flex items-center gap-3"><Star className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-fuchsia-600 to-pink-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Benchmarks</h1></div>
             <p className="text-gray-500 font-medium mt-2 text-sm md:text-base">
               Real performance metrics, latency profiles, and reproducible validation results.
             </p>
@@ -276,7 +276,7 @@ export default function BenchmarksPage() {
             <div className="border border-gray-200 rounded-2xl bg-white shadow-sm p-6">
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h3 className="text-xl font-extrabold text-black mb-1" style={{ fontFamily: 'Instrument Serif, serif' }}>API Cost Estimator</h3>
+                  <h3 className="text-xl font-extrabold text-black mb-1" style={{ fontFamily: 'Playfair Display', serif }}>API Cost Estimator</h3>
                   <p className="text-xs font-medium text-gray-500">Estimate your monthly spend based on request volume.</p>
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-green-600">
@@ -347,3 +347,4 @@ export default function BenchmarksPage() {
     </div>
   )
 }
+

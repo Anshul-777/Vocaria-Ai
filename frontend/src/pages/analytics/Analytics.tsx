@@ -87,7 +87,7 @@ export default function Analytics() {
       <Reveal>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-2">
           <div>
-            <div className="flex items-center gap-3"><BarChart3 className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-yellow-500 to-amber-500 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>Analytics</h1></div>
+            <div className="flex items-center gap-3"><BarChart3 className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-yellow-500 to-amber-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Analytics</h1></div>
             <p className="text-surface-500 font-500 mt-2 text-sm md:text-base">Usage metrics, activity trends, and detection statistics.</p>
           </div>
           <div className="flex gap-2">
@@ -471,3 +471,4 @@ export default function Analytics() {
     </div>
   )
 }
+

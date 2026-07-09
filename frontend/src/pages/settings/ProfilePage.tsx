@@ -268,7 +268,7 @@ function AssignProfileModal({ job, onClose, onAssigned }: { job: any, onClose: (
               )}
               
               <button disabled={saving} onClick={handleSubmit} className="w-full mt-4 bg-[var(--purple)] hover:bg-[var(--purple-hover)] text-white font-bold py-2 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
-                {saving ? <Spinner className="w-4 h-4" /> : < Bookmark size={16} />}
+                {saving ? <Spinner size={16} /> : < Bookmark size={16} />}
                 {saving ? "Saving..." : "Save Profile"}
               </button>
             </div>

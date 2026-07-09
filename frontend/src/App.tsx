@@ -1,5 +1,6 @@
 import React, { useEffect, Suspense, lazy } from 'react'
 import { motion } from 'framer-motion'
+
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './store/authStore'
@@ -150,7 +151,7 @@ export default function App() {
     <BrowserRouter>
       <Toaster position="top-right" gutter={8} toastOptions={{ duration: 4000, style: { borderRadius: 12, fontSize: 13.5, fontWeight: 500, padding: '10px 14px', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(15,23,42,0.12)', background: 'white', color: 'var(--fg)' }, success: { iconTheme: { primary: '#16a34a', secondary: '#fff' } }, error: { iconTheme: { primary: '#dc2626', secondary: '#fff' } } }} />
       <Suspense fallback={<Loader />}>
-        <Routes>
+          <Routes>
           <Route path="/" element={<PublicOnly><Landing /></PublicOnly>} />
           <Route path="/start" element={<Protected><Start /></Protected>} />
           <Route path="/u/:username" element={<PublicProfile />} />
@@ -189,7 +190,7 @@ export default function App() {
             <Route path="/studio" element={<StudioPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+          </Routes>
       </Suspense>
       {user && <Chatbot />}
     </BrowserRouter>

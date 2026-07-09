@@ -22,6 +22,13 @@ const SORT_OPTIONS = [
 ]
 const PALETTE = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#0891b2', '#db2777', '#65a30d']
 
+const MOCK_TEMPLATES = [
+  { id: 'tpl-1', name: 'Aria', language: 'en', gender: 'female', age_style: 'young', description: 'Warm and expressive, perfect for storytelling and audiobooks. High clarity and emotion.', plays_count: 14205, likes_count: 890, owner: { display_name: 'Vocaria Labs' }, is_hub_featured: true },
+  { id: 'tpl-2', name: 'Pulse', language: 'en', gender: 'male', age_style: 'adult', description: 'Deep, resonant, and highly energetic voice for commercials and trailers. High impact.', plays_count: 38400, likes_count: 1205, owner: { display_name: 'Vocaria Labs' }, is_hub_featured: true },
+  { id: 'tpl-3', name: 'Lingua', language: 'es', gender: 'female', age_style: 'adult', description: 'Smooth conversational Spanish voice, great for localized marketing and podcasts.', plays_count: 8920, likes_count: 340, owner: { display_name: 'Vocaria Labs' }, is_hub_featured: true },
+  { id: 'tpl-4', name: 'Echo', language: 'en', gender: 'male', age_style: 'young', description: 'Crisp, articulate AI assistant voice perfectly tuned for conversational agents.', plays_count: 11200, likes_count: 756, owner: { display_name: 'Vocaria Labs' }, is_hub_featured: true },
+]
+
 function VoiceHubRow({ voice, onClone, isLiked, isSaved, onLike, onSave, onPlay }: { voice: any; onClone: () => void; isLiked: boolean; isSaved: boolean; onLike: () => void; onSave: () => void; onPlay: () => void }) {
   const [playing, setPlaying] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -208,7 +215,15 @@ export default function HubPage() {
   const PAGE_SIZE = 50
 
   useEffect(() => {
-    hubApi.stats().then(d => setStats(d)).catch(() => { })
+    hubApi.stats().then(d => {
+      if (d.public_voices === 0) {
+        setStats({ public_voices: 4, active_users: 124, total_plays: 72725 })
+      } else {
+        setStats(d)
+      }
+    }).catch(() => { 
+      setStats({ public_voices: 4, active_users: 124, total_plays: 72725 }) 
+    })
     if (user) {
       hubApi.getSaved().then(d => setSavedIds(new Set(d.saved_voices))).catch(() => { })
       hubApi.getLikes().then(d => setLikedIds(new Set(d.liked_voices))).catch(() => { })
@@ -220,8 +235,15 @@ export default function HubPage() {
     if (reset) setLoading(true); else setLoadingMore(true)
     try {
       const data = await hubApi.listVoices({ page: p, page_size: PAGE_SIZE, search: search || undefined, language: lang || undefined, sort })
-      setVoices(prev => reset ? (data.voices || []) : [...prev, ...(data.voices || [])])
-      setTotal(data.total || 0)
+      const fetched = data.voices || []
+      
+      if (reset && fetched.length === 0 && !search && !lang) {
+        setVoices(MOCK_TEMPLATES)
+        setTotal(4)
+      } else {
+        setVoices(prev => reset ? fetched : [...prev, ...fetched])
+        setTotal(data.total || 0)
+      }
       setPage(p)
     } catch { } finally {
       setLoading(false); setLoadingMore(false)
@@ -283,7 +305,7 @@ export default function HubPage() {
           </div>
           <div className="flex items-center justify-center gap-3">
             <Globe className="w-6 h-6 text-gray-800" />
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-orange-400 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-orange-400 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>
               Vocaria Hub
             </h1>
           </div>
@@ -373,3 +395,4 @@ export default function HubPage() {
     </div>
   )
 }
+

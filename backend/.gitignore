@@ -8,3 +8,5 @@ temp_venv/
 __pycache__/
 .env
 .env.*
+# Keep the safe template tracked
+!.env.example

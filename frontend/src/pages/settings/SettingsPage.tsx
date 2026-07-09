@@ -378,7 +378,7 @@ export default function SettingsPage() {
       {/* Page Header */}
       <Reveal>
         <div className="mb-10">
-          <div className="flex items-center gap-3"><Settings className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-700 to-slate-500 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>Settings</h1></div>
+          <div className="flex items-center gap-3"><Settings className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-gray-700 to-slate-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Settings</h1></div>
           <p className="text-gray-500 font-medium text-sm md:text-base max-w-lg">
             Manage your account preferences, subscriptions, data, and security.
           </p>
@@ -441,3 +441,4 @@ export default function SettingsPage() {
     </div>
   )
 }
+

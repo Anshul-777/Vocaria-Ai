@@ -334,7 +334,7 @@ export default function VoiceAgent() {
         <Reveal>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
             <div>
-              <div className="flex items-center gap-3"><Bot className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-500 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>Vocaria Agent</h1></div>
+              <div className="flex items-center gap-3"><Bot className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Vocaria Agent</h1></div>
               <p className="text-gray-500 font-medium mt-1.5 text-sm">
                 Interact with your customized voices in real-time.
               </p>
@@ -638,3 +638,4 @@ export default function VoiceAgent() {
     </div>
   )
 }
+

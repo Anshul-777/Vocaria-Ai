@@ -17,7 +17,7 @@ The most complete open-source voice AI platform. Real voice cloning, expressive 
 - Public/private voice profiles with metadata
 
 ### Voice Generation (TTS)
-- 17 language support via XTTS-v2
+- Powered by Kokoro-82M, Parler TTS, and XTTS-v2 (17 languages)
 - Emotion styles: neutral, happy, sad, excited, calm, professional, storytelling, news
 - Speed, pitch, temperature controls
 - SSML support (Pro plan)
@@ -38,7 +38,7 @@ The most complete open-source voice AI platform. Real voice cloning, expressive 
 - Real-time notifications via WebSocket.
 - Full audit log with CSV export.
 - API key management & Admin console.
-- AI Chatbot assistant (Claude-powered).
+- AI Chatbot assistant (Vocaria Agent).
 - Real-time social features: follows, likes, comments in the public Voice Hub.
 
 ---
@@ -51,9 +51,9 @@ The most complete open-source voice AI platform. Real voice cloning, expressive 
 | Backend             | FastAPI, SQLAlchemy 2.0 async, PostgreSQL              |
 | Cache/Queue         | Redis, Celery                                          |
 | Storage             | Supabase Storage / MinIO (S3-compatible) / Local       |
-| Voice Cloning       | Coqui TTS / XTTS-v2, Parler TTS, Chatterbox            |
+| Voice Cloning & TTS | Kokoro-82M, Coqui XTTS-v2, Parler TTS, Chatterbox Turbo|
 | Detection           | Wav2Vec2, AASIST, RawNet2, + custom models             |
-| STT & LLM           | Groq Whisper Turbo, Anthropic Claude                   |
+| STT & LLM           | Vocaria Agent LLM                                      |
 | Diarization         | pyannote.audio 3.1                                     |
 | Auth                | Supabase Auth / JWT                                    |
 
@@ -146,12 +146,12 @@ Without checkpoints, the system uses built-in heuristic detectors which are less
 ## Chatbot Setup
 
 The AI assistant works out of the box with built-in knowledge base responses.
-For full Claude-powered AI responses:
+For full Vocaria Agent-powered AI responses:
 
-1. Get an API key from https://console.anthropic.com
-2. Add to `frontend/.env`:
+1. Obtain your internal Agent API key from the Vocaria Admin console.
+2. Add to `backend/.env`:
    ```
-   VITE_CHATBOT_API_KEY=sk-ant-...
+   AGENT_API_KEY=your_agent_api_key_here
    ```
 
 ---
@@ -171,7 +171,7 @@ Key variables:
 | `STORAGE_BACKEND` | `minio`, `s3`, or `local` |
 | `HF_TOKEN` | HuggingFace token for pyannote diarization |
 | `STRIPE_SECRET_KEY` | Stripe key for payment processing |
-| `VITE_CHATBOT_API_KEY` | Anthropic API key for AI chatbot |
+| `AGENT_API_KEY` | Internal API key for Vocaria AI chatbot |
 
 ---
 

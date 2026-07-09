@@ -145,7 +145,7 @@ export function HistoryPage() {
       <Reveal>
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-2">
           <div>
-            <div className="flex items-center gap-3"><History className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-600 to-gray-500 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>History</h1></div>
+            <div className="flex items-center gap-3"><History className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-600 to-gray-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>History</h1></div>
             <p className="text-gray-500 font-medium mt-1 text-sm md:text-base">Your activity trail across Vocaria services.</p>
           </div>
           
@@ -336,3 +336,4 @@ export function HistoryPage() {
 }
 
 export default HistoryPage
+

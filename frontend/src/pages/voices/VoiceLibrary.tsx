@@ -212,7 +212,7 @@ export default function VoiceLibrary() {
       <Reveal>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3"><Mic2 className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-green-600 to-emerald-500 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>Voice Profiles</h1></div>
+            <div className="flex items-center gap-3"><Mic2 className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-green-600 to-emerald-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Voice Profiles</h1></div>
             <p className="text-gray-500 font-medium mt-1.5 text-sm">
               {total} voice profiles · Manage, clone, and generate
             </p>
@@ -290,3 +290,4 @@ export default function VoiceLibrary() {
     </div>
   )
 }
+

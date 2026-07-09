@@ -68,7 +68,7 @@ export default function AuditPage() {
         className="flex flex-col md:flex-row md:items-end justify-between gap-6"
       >
         <div>
-          <div className="flex items-center gap-3"><FileText className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-teal-600 to-emerald-500 animate-text-pan" style={{ fontFamily: 'Instrument Serif, serif' }}>Audit Logs</h1></div>
+          <div className="flex items-center gap-3"><FileText className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-teal-600 to-emerald-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Audit Logs</h1></div>
           <p className="text-gray-500 font-medium text-sm md:text-base max-w-lg">
             A comprehensive, immutable ledger of all system events, user actions, and security operations. 
             <span className="text-black font-semibold ml-1">{total.toLocaleString()} total events.</span>
@@ -247,3 +247,4 @@ export default function AuditPage() {
     </div>
   )
 }
+
