@@ -1,13 +1,3 @@
----
-title: Vocaria Backend
-emoji: 📊
-colorFrom: blue
-colorTo: pink
-sdk: docker
-pinned: false
-license: apache-2.0
----
-
 <div align="center">
 
 # 🧠 Vocaria · Backend
