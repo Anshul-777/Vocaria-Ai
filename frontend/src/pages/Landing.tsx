@@ -603,7 +603,7 @@ const Hero: React.FC<{ onRegister: () => void }> = ({ onRegister }) => {
             Start building free <ArrowRight size={16} />
           </PrimaryBtn>
           <GhostBtn
-            dark
+            className="text-white/80 hover:bg-white/10 hover:text-white"
             onClick={() => document.getElementById("voices")?.scrollIntoView({ behavior: "smooth" })}
           >
             <Headphones size={16} /> Hear the voices
@@ -759,9 +759,12 @@ const TrustBand = () => {
     <section className="py-12 bg-[#FDFBF7] border-y border-black/[0.03] overflow-hidden">
       <div className="max-w-[1400px] mx-auto px-8 mb-8 text-center flex items-center justify-center gap-4">
         <div className="h-px bg-black/[0.04] flex-1 max-w-[100px]" />
-        <PincerReveal as="span" className="text-[10px] font-bold uppercase tracking-[0.3em] text-black/40">
-          One Platform · The Entire Voice Lifecycle
-        </PincerReveal>
+        <PincerReveal 
+          className="text-[10px] font-bold uppercase tracking-[0.3em] text-black/40"
+          leftText="One Platform"
+          centerText="·"
+          rightText="The Entire Voice Lifecycle"
+        />
         <div className="h-px bg-black/[0.04] flex-1 max-w-[100px]" />
       </div>
       <div className="relative">
