@@ -305,7 +305,7 @@ export default function HubPage() {
           </div>
           <div className="flex items-center justify-center gap-3">
             <Globe className="w-6 h-6 text-gray-800" />
-            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-orange-400 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-pink-500 to-orange-400 animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>
               Vocaria Hub
             </h1>
           </div>

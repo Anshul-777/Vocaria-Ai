@@ -264,7 +264,7 @@ export default function Billing() {
       <Reveal>
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-2">
           <div>
-            <div className="flex items-center gap-3"><CreditCard className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-green-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Billing</h1></div>
+            <div className="flex items-center gap-3"><CreditCard className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-emerald-600 to-green-500 animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>Billing</h1></div>
             <p className="text-gray-500 font-medium mt-2 text-sm md:text-base">Manage your subscription, plan tiers, and monthly usage quotas.</p>
           </div>
         </div>

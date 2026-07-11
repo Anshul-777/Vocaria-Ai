@@ -92,7 +92,7 @@ export default function Dashboard() {
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-start justify-between gap-6">
         <div>
-          <div className="flex items-center gap-3"><Gauge className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-[linear-gradient(to_right,#ef4444,#f59e0b,#10b981,#3b82f6,#8b5cf6,#ef4444)] animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>{greeting}</h1></div>
+          <div className="flex items-center gap-3"><Gauge className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-[linear-gradient(to_right,#ef4444,#f59e0b,#10b981,#3b82f6,#8b5cf6,#ef4444)] animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>{greeting}</h1></div>
           <p className="text-gray-500 font-medium mt-2 text-sm md:text-base">Your creative workspace is ready. Let's build something amazing today.</p>
         </div>
         <div className="flex items-center gap-3">

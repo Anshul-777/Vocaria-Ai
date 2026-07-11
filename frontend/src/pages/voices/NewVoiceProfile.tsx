@@ -57,7 +57,7 @@ export default function NewVoiceProfile() {
       <Reveal>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-3"><Zap className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-fuchsia-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Clone Voice</h1></div>
+            <div className="flex items-center gap-3"><Zap className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-fuchsia-500 animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>Clone Voice</h1></div>
             <p className="text-gray-500 font-medium mt-1.5 text-sm">
               Define the demographics and characteristics of this voice profile.
             </p>

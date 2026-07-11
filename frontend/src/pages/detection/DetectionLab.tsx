@@ -238,7 +238,7 @@ export default function DetectionLab() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <div className="flex items-center gap-3"><Shield className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-rose-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Detection Lab</h1></div>
+          <div className="flex items-center gap-3"><Shield className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-red-600 to-rose-500 animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>Detection Lab</h1></div>
           <p className="text-surface-500 text-sm mt-1">Upload audio or record your voice for multi-model deepfake analysis.</p>
         </div>
         <Link to="/detection/live" className="flex items-center gap-2 px-5 py-2.5 bg-brand-50 text-brand-700 hover:bg-brand-100 rounded-xl text-sm font-700 transition-colors border border-brand-200 shadow-sm">

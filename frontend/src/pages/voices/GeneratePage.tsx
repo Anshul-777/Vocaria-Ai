@@ -376,7 +376,7 @@ export default function GeneratePage() {
       <Reveal>
         <div style={{ marginBottom: 28, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div className="flex items-center gap-3"><Wand2 className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-red-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Generate Voice</h1></div>
+            <div className="flex items-center gap-3"><Wand2 className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-orange-500 to-red-500 animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>Generate Voice</h1></div>
             <p style={{ color: '#64748b', fontSize: 14, marginTop: 4 }}>
               Describe the exact voice you want. The AI will synthesize an entirely new, unique acoustic identity.
             </p>

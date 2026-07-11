@@ -262,7 +262,7 @@ export default function LiveDetection() {
       <Reveal>
         <div className="flex items-center justify-between">
           <div>
-            <div className="flex items-center gap-3"><Activity className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-rose-500 to-pink-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Live Detection</h1></div>
+            <div className="flex items-center gap-3"><Activity className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-rose-500 to-pink-500 animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>Live Detection</h1></div>
             <p className="text-surface-500 text-sm mt-1">Real-time deepfake analysis from microphone. 5-model ensemble scores every audio chunk.</p>
           </div>
           <div className="flex items-center gap-3">

@@ -354,7 +354,7 @@ export default function StudioPage() {
           <div>
             <div className="flex items-center gap-3">
               <Wand2 className="w-6 h-6 text-gray-800" />
-              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>
+              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-500 animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>
                 Voice Studio
               </h1>
             </div>

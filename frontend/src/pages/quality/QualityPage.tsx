@@ -190,7 +190,7 @@ export default function QualityPage() {
       <Reveal>
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 mb-2">
           <div>
-            <div className="flex items-center gap-3"><FlaskConical className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-cyan-500 to-blue-500 animate-text-pan" style={{ fontFamily: 'Playfair Display', serif }}>Quality Lab</h1></div>
+            <div className="flex items-center gap-3"><FlaskConical className="w-6 h-6 text-gray-800" /><h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-cyan-500 to-blue-500 animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>Quality Lab</h1></div>
             <p className="text-gray-500 font-medium mt-2 text-sm md:text-base">Analyze audio quality, SNR, deepfake probability, diarization, and suitability for voice cloning.</p>
           </div>
           {result && (
