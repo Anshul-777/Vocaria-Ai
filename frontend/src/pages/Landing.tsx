@@ -547,8 +547,8 @@ const Hero: React.FC<{ onRegister: () => void }> = ({ onRegister }) => {
   const langs = ["English", "Español", "Français", "Deutsch", "日本語", "हिन्दी", "中文", "Italiano"];
 
   return (
-    <section ref={ref} className="relative pt-36 pb-24 overflow-hidden bg-[#FDFBF7]">
-      <div className="absolute inset-0 z-0">
+    <section ref={ref} className="relative pt-36 pb-24 overflow-hidden bg-black">
+      <div className="absolute inset-0 z-0 bg-black">
         <video
           autoPlay
           loop
@@ -556,10 +556,10 @@ const Hero: React.FC<{ onRegister: () => void }> = ({ onRegister }) => {
           playsInline
           className="absolute inset-0 w-full h-full object-cover"
         >
-          <source src="/hero-bg-v2.mp4" type="video/mp4" />
+          <source src="https://res.cloudinary.com/i1su92rm/video/upload/Abstract_glass_sound_waves_dark_202607082031_k4azj6.mp4" type="video/mp4" />
         </video>
         {/* Only fade at the very bottom to blend into the next section */}
-        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#FDFBF7] to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
       </div>
       <MeshBg variant="light" className="opacity-50" />
       <GridTexture />
