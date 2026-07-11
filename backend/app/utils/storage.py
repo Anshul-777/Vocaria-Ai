@@ -81,14 +81,18 @@ class StorageBackend:
             dest.write_bytes(data)
             return key
         if self.backend == "supabase":
-            client = self._get_supabase_client()
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                lambda: client.storage.from_(bucket).upload(
-                    file=data, path=key, file_options={"content-type": content_type, "upsert": "true"}
-                )
-            )
+            import httpx
+            url = f"{settings.SUPABASE_URL}/storage/v1/object/{bucket}/{key}"
+            headers = {
+                "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
+                "Content-Type": content_type,
+                "x-upsert": "true"
+            }
+            async with httpx.AsyncClient(http2=False) as http_client:
+                res = await http_client.post(url, content=data, headers=headers)
+                if res.status_code >= 400:
+                    logger.error(f"Supabase upload failed: {res.status_code} {res.text}")
+                    res.raise_for_status()
             return key
             
         loop = asyncio.get_event_loop()
@@ -104,10 +108,17 @@ class StorageBackend:
         if self.backend == "local":
             return (self._base / bucket / key).read_bytes()
         if self.backend == "supabase":
-            client = self._get_supabase_client()
-            loop = asyncio.get_event_loop()
-            res = await loop.run_in_executor(None, lambda: client.storage.from_(bucket).download(key))
-            return res
+            import httpx
+            url = f"{settings.SUPABASE_URL}/storage/v1/object/{bucket}/{key}"
+            headers = {
+                "Authorization": f"Bearer {settings.SUPABASE_SERVICE_KEY}",
+            }
+            async with httpx.AsyncClient(http2=False) as http_client:
+                res = await http_client.get(url, headers=headers)
+                if res.status_code >= 400:
+                    logger.error(f"Supabase download failed: {res.status_code} {res.text}")
+                    res.raise_for_status()
+                return res.content
             
         loop = asyncio.get_event_loop()
         client = self._get_minio_client()
