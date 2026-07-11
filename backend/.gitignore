@@ -8,5 +8,6 @@ temp_venv/
 __pycache__/
 .env
 .env.*
+.env.private
 # Keep the safe template tracked
 !.env.example

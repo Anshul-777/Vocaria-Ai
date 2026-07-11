@@ -68,6 +68,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "https://vocaria.ai",
         "https://app.vocaria.ai",
+        "https://vocaria-ai.vercel.app",
+        "https://vocariaai.vercel.app",
     ]
 
     # ── Rate Limiting ────────────────────────────────────────────────────────
