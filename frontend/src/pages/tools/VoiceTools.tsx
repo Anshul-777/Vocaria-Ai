@@ -534,7 +534,7 @@ export default function VoiceTools() {
 
       {/* ── TOOL WORKSPACE ── */}
       {activeTool && activeTool.type !== 'redirect' && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl rounded-3xl shadow-lg overflow-hidden" style={{ background: 'var(--bg, #fff)', border: '1px solid var(--border-2, #eee)' }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl mx-auto rounded-3xl shadow-lg overflow-hidden" style={{ background: 'var(--bg, #fff)', border: '1px solid var(--border-2, #eee)' }}>
           {/* Header */}
           <div className="p-6 flex items-center gap-4" style={{ borderBottom: '1px solid var(--border-2, #eee)', background: 'var(--bg-2, #f8f9fa)' }}>
             <button
