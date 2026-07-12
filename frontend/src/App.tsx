@@ -12,8 +12,11 @@ import Chatbot from './components/Chatbot'
 const WorkspaceLayout = lazy(() => import('./components/layout/WorkspaceLayout'))
 const WorkspaceDashboard = lazy(() => import('./pages/agent/WorkspaceDashboard'))
 const AgentManagement = lazy(() => import('./pages/agent/AgentManagement'))
-const AgentConnections = lazy(() => import('./pages/agent/AgentConnections'))
 const KnowledgeBasePage = lazy(() => import('./pages/agent/KnowledgeBase'))
+const ActivityLog = lazy(() => import('./pages/agent/ActivityLog'))
+const AgentIntegrations = lazy(() => import('./pages/agent/AgentIntegrations'))
+const LiveVoiceChat = lazy(() => import('./pages/agent/LiveVoiceChat'))
+const WorkspaceAccount = lazy(() => import('./pages/agent/WorkspaceAccount'))
 
 const Landing = lazy(() => import('./pages/Landing'))
 const Start = lazy(() => import('./pages/Start'))
@@ -202,9 +205,14 @@ export default function App() {
           <Route element={<Protected><WorkspaceLayout /></Protected>}>
             <Route path="/agent/dashboard" element={<WorkspaceDashboard />} />
             <Route path="/agent/agents" element={<AgentManagement />} />
-            <Route path="/agent/connections" element={<AgentConnections />} />
             <Route path="/agent/knowledge-base" element={<KnowledgeBasePage />} />
+            <Route path="/agent/activity" element={<ActivityLog />} />
+            <Route path="/agent/integrations" element={<AgentIntegrations />} />
+            <Route path="/agent/live-chat" element={<LiveVoiceChat />} />
+            <Route path="/agent/account" element={<WorkspaceAccount />} />
           </Route>
+          {/* Legacy redirect */}
+          <Route path="/agent/connections" element={<Navigate to="/agent/activity" replace />} />
           <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
       </Suspense>
