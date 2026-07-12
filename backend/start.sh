@@ -6,8 +6,6 @@ set -e
 echo "Starting local Redis server..."
 redis-server --daemonize yes
 
-echo "Updating database enums..."
-python alter_detection_enum.py || true
 
 echo "Waiting for Redis to be ready..."
 sleep 2
