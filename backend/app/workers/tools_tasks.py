@@ -174,38 +174,10 @@ def vocal_remover_task(self, upload_key: str, mode: str = "vocals") -> Dict[str,
 
         self.update_state(state="PROCESSING", meta={"step": "separating_stems"})
 
-        # Run spleeter via CLI (more reliable than Python API in Celery workers)
-        cmd = [
-            "python", "-m", "spleeter", "separate",
-            "-p", "spleeter:2stems",
-            "-o", tmp_dir,
-            input_path,
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if result.returncode != 0:
-            raise RuntimeError(f"Spleeter error: {result.stderr[:500]}")
-
-        # Spleeter outputs to <tmp_dir>/input/<vocals|accompaniment>.wav
-        stem_dir = os.path.join(tmp_dir, "input")
-        if mode == "vocals":
-            stem_path = os.path.join(stem_dir, "vocals.wav")
-            fname = "isolated_vocals.wav"
-        else:
-            stem_path = os.path.join(stem_dir, "accompaniment.wav")
-            fname = "accompaniment.wav"
-
-        if not os.path.exists(stem_path):
-            raise FileNotFoundError(f"Spleeter did not produce {mode} stem")
-
-        audio_bytes = Path(stem_path).read_bytes()
-        url = _save_to_storage_sync(audio_bytes, fname, "audio/wav")
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-
-        return {"status": "completed", "output_url": url, "filename": fname}
-
     except Exception as exc:
         logger.error(f"vocal_remover_task failed: {exc}", exc_info=True)
         return {"status": "failed", "error": str(exc)}
+
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -228,27 +200,7 @@ def stem_splitter_task(self, upload_key: str) -> Dict[str, Any]:
 
         self.update_state(state="PROCESSING", meta={"step": "splitting_stems"})
 
-        cmd = [
-            "python", "-m", "spleeter", "separate",
-            "-p", "spleeter:4stems",
-            "-o", tmp_dir,
-            input_path,
-        ]
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
-        if result.returncode != 0:
-            raise RuntimeError(f"Spleeter 4stems error: {result.stderr[:500]}")
-
-        stem_dir = os.path.join(tmp_dir, "input")
-        outputs = {}
-        for stem_name in ["vocals", "drums", "bass", "other"]:
-            stem_path = os.path.join(stem_dir, f"{stem_name}.wav")
-            if os.path.exists(stem_path):
-                data = Path(stem_path).read_bytes()
-                url = _save_to_storage_sync(data, f"{stem_name}.wav", "audio/wav")
-                outputs[stem_name] = url
-
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-        return {"status": "completed", "stems": outputs}
+        return {"status": "failed", "error": "Stem separation is currently disabled in this deployment environment."}
 
     except Exception as exc:
         logger.error(f"stem_splitter_task failed: {exc}", exc_info=True)
