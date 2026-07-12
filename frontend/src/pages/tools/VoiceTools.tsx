@@ -406,7 +406,7 @@ export default function VoiceTools() {
   // ══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="w-full min-h-[70vh] flex flex-col items-center py-12 px-4 font-sans" style={{ background: 'var(--bg, #fff)' }}>
+    <div className="w-full pb-12">
 
       {/* ── GRID VIEW ── */}
       {!activeTool && !showRecents && (
@@ -439,7 +439,7 @@ export default function VoiceTools() {
             </div>
           </div>
 
-          <div className="w-full mt-2 px-4 pb-12">
+          <div className="w-full mt-10">
             <motion.div
               variants={{
                 hidden: { opacity: 0 },
@@ -450,7 +450,7 @@ export default function VoiceTools() {
               }}
               initial="hidden"
               animate="show"
-              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-y-12 gap-x-6"
+              className="flex flex-wrap justify-center gap-y-12 gap-x-8 md:gap-x-12 max-w-[1200px] mx-auto"
             >
               {AUDIO_TOOLS.map((feature) => {
                 const Icon = feature.icon;
@@ -459,25 +459,20 @@ export default function VoiceTools() {
                     variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
                     key={feature.id}
                     onClick={() => openTool(feature)}
-                    className="relative flex flex-col items-center text-center cursor-pointer group"
+                    className="relative flex flex-col items-center text-center cursor-pointer group w-36"
                   >
-                    <div className="group/tooltip relative w-20 h-20 mb-4 rounded-[1.25rem] flex items-center justify-center bg-gray-50 border border-gray-100 group-hover:-translate-y-2 group-hover:shadow-xl group-hover:bg-white group-hover:border-indigo-100 transition-all duration-300">
+                    <div className="w-20 h-20 mb-4 rounded-[1.25rem] flex items-center justify-center bg-gray-50 border border-gray-100 group-hover:-translate-y-2 group-hover:shadow-xl group-hover:bg-white group-hover:border-indigo-100 transition-all duration-300">
                       <Icon size={32} strokeWidth={1.5} className="text-[#1a2b3c] group-hover:text-indigo-600 transition-colors" />
-                      
-                      {/* Tooltip trigger */}
-                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10">
-                        <HelpCircle size={14} className="text-gray-400 hover:text-indigo-500" />
-                      </div>
-                      
-                      {/* Tooltip content */}
-                      <div className="absolute z-50 bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-48 p-3 bg-[#1a2b3c] text-white text-[13px] leading-snug rounded-xl opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 shadow-xl text-center pointer-events-none">
-                        {feature.description}
-                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a2b3c] rotate-45"></div>
-                      </div>
                     </div>
                     <span className="font-bold text-[15px] text-[#333] group-hover:text-indigo-900 transition-colors">
                       {feature.name}
                     </span>
+                    
+                    {/* Tooltip content */}
+                    <div className="absolute z-50 bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-52 p-3.5 bg-black text-white text-[13px] leading-relaxed rounded-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 shadow-2xl text-center pointer-events-none">
+                      {feature.description}
+                      <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-black rotate-45"></div>
+                    </div>
                   </motion.div>
                 );
               })}
