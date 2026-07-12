@@ -5,7 +5,8 @@ import {
   Split, Music, Mic, Activity, BarChart2, ArrowDownCircle,
   MoveHorizontal, Filter, ChevronLeft, ChevronRight, Upload, FileAudio,
   Loader2, PlaySquare, Download, Clock, ExternalLink, Link2,
-  Zap, Copy, Search, Trash2, CheckCircle2, XCircle, ArrowRight, FlaskConical
+  Zap, Copy, Search, Trash2, CheckCircle2, XCircle, ArrowRight, FlaskConical,
+  HelpCircle, Info
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -208,7 +209,6 @@ export default function VoiceTools() {
   const navigate = useNavigate();
 
   // Grid state
-  const [currentPage, setCurrentPage] = useState(0);
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [showRecents, setShowRecents] = useState(false);
 
@@ -220,6 +220,7 @@ export default function VoiceTools() {
   const [processingStep, setProcessingStep] = useState('');
   const [taskId, setTaskId] = useState<string | null>(null);
   const [result, setResult] = useState<Record<string, any> | null>(null);
+  const [showCompare, setShowCompare] = useState(false);
 
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
@@ -230,10 +231,6 @@ export default function VoiceTools() {
   // Recents
   const [recents, setRecents] = useState<RecentItem[]>(loadRecents());
 
-  const totalPages = Math.ceil(AUDIO_TOOLS.length / ITEMS_PER_PAGE);
-  const nextPage = () => setCurrentPage((p) => (p + 1) % totalPages);
-  const prevPage = () => setCurrentPage((p) => (p - 1 + totalPages) % totalPages);
-  const currentFeatures = AUDIO_TOOLS.slice(currentPage * ITEMS_PER_PAGE, (currentPage + 1) * ITEMS_PER_PAGE);
   const activeTool = AUDIO_TOOLS.find((t) => t.id === activeToolId);
 
   // ── Reset workspace when tool changes ──
@@ -249,6 +246,7 @@ export default function VoiceTools() {
     setTaskId(null);
     setIsProcessing(false);
     setRecordedBlob(null);
+    setShowCompare(false);
 
     // Initialize extra field defaults
     const defaults: Record<string, any> = {};
@@ -412,85 +410,75 @@ export default function VoiceTools() {
 
       {/* ── GRID VIEW ── */}
       {!activeTool && !showRecents && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-5xl flex flex-col items-center">
-          <div className="w-full flex items-center justify-between mb-4">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-[1400px] flex flex-col items-center">
+          <div className="w-full flex items-center justify-between mb-8 px-4">
             <div>
-              <h2 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter', sans-serif", color: 'var(--fg, #1a2b3c)' }}>
+              <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter', sans-serif", color: 'var(--fg, #1a2b3c)' }}>
                 Voice Tools
               </h2>
-              <p className="text-sm mt-1" style={{ color: 'var(--fg-4, #888)' }}>Professional AI-powered audio processing suite</p>
+              <p className="text-sm md:text-base mt-2" style={{ color: 'var(--fg-4, #888)' }}>Professional AI-powered audio processing suite</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
               <button
                 onClick={() => navigate('/quality')}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:bg-blue-100 hover:shadow-sm"
                 style={{ background: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}
               >
-                <FlaskConical size={15} /> Quality Lab
+                <FlaskConical size={16} /> Quality Lab
               </button>
               <button
                 onClick={() => setShowRecents(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:bg-gray-200 hover:shadow-sm"
                 style={{ background: 'var(--bg-3, #f3f4f6)', color: 'var(--fg-3, #555)' }}
               >
-                <Clock size={15} /> Recent ({recents.length})
+                <Clock size={16} /> Recent ({recents.length})
               </button>
             </div>
           </div>
 
-          <div className="w-full flex items-center justify-between mt-6">
-            <button onClick={prevPage} className="p-2 transition-colors" style={{ color: 'var(--fg, #1a2b3c)' }}>
-              <ChevronLeft size={48} strokeWidth={1} />
-            </button>
-
-            <div className="flex-1 overflow-hidden px-8 min-h-[300px]">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentPage}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  transition={{ duration: 0.2 }}
-                  className="grid grid-cols-2 md:grid-cols-4 gap-y-14 gap-x-8"
-                >
-                  {currentFeatures.map((feature) => {
-                    const Icon = feature.icon;
-                    return (
-                      <div
-                        key={feature.id}
-                        onClick={() => openTool(feature)}
-                        className="flex flex-col items-center text-center cursor-pointer group"
-                      >
-                        <div className="w-16 h-16 mb-3 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-all duration-300" style={{ background: 'var(--bg-2, #f8f9fa)', border: '1px solid var(--border-2, #eee)' }}>
-                          <Icon size={28} strokeWidth={1.5} style={{ color: 'var(--fg, #1a2b3c)' }} />
-                        </div>
-                        <span className="font-semibold text-[14px] transition-colors" style={{ color: 'var(--fg-2, #333)' }}>
-                          {feature.name}
-                        </span>
-                        <span className="text-[11px] mt-1 max-w-[140px] leading-tight" style={{ color: 'var(--fg-5, #aaa)' }}>
-                          {feature.description.length > 50 ? feature.description.slice(0, 48) + '…' : feature.description}
-                        </span>
+          <div className="w-full mt-2 px-4 pb-12">
+            <motion.div
+              variants={{
+                hidden: { opacity: 0 },
+                show: {
+                  opacity: 1,
+                  transition: { staggerChildren: 0.05 }
+                }
+              }}
+              initial="hidden"
+              animate="show"
+              className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-y-12 gap-x-6"
+            >
+              {AUDIO_TOOLS.map((feature) => {
+                const Icon = feature.icon;
+                return (
+                  <motion.div
+                    variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
+                    key={feature.id}
+                    onClick={() => openTool(feature)}
+                    className="relative flex flex-col items-center text-center cursor-pointer group"
+                  >
+                    <div className="group/tooltip relative w-20 h-20 mb-4 rounded-[1.25rem] flex items-center justify-center bg-gray-50 border border-gray-100 group-hover:-translate-y-2 group-hover:shadow-xl group-hover:bg-white group-hover:border-indigo-100 transition-all duration-300">
+                      <Icon size={32} strokeWidth={1.5} className="text-[#1a2b3c] group-hover:text-indigo-600 transition-colors" />
+                      
+                      {/* Tooltip trigger */}
+                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-white border border-gray-200 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm z-10">
+                        <HelpCircle size={14} className="text-gray-400 hover:text-indigo-500" />
                       </div>
-                    );
-                  })}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-
-            <button onClick={nextPage} className="p-2 transition-colors" style={{ color: 'var(--fg, #1a2b3c)' }}>
-              <ChevronRight size={48} strokeWidth={1} />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 mt-10">
-            {Array.from({ length: totalPages }).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentPage(i)}
-                className="w-2.5 h-2.5 rounded-full transition-all"
-                style={{ background: currentPage === i ? 'var(--fg, #1a2b3c)' : 'var(--border, #ddd)' }}
-              />
-            ))}
+                      
+                      {/* Tooltip content */}
+                      <div className="absolute z-50 bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-48 p-3 bg-[#1a2b3c] text-white text-[13px] leading-snug rounded-xl opacity-0 invisible group-hover/tooltip:opacity-100 group-hover/tooltip:visible transition-all duration-200 shadow-xl text-center pointer-events-none">
+                        {feature.description}
+                        <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-[#1a2b3c] rotate-45"></div>
+                      </div>
+                    </div>
+                    <span className="font-bold text-[15px] text-[#333] group-hover:text-indigo-900 transition-colors">
+                      {feature.name}
+                    </span>
+                  </motion.div>
+                );
+              })}
+            </motion.div>
           </div>
         </motion.div>
       )}
@@ -570,10 +558,88 @@ export default function VoiceTools() {
 
             {/* ── Result View ── */}
             {result && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 text-green-600 font-bold text-lg">
-                  <CheckCircle2 size={24} /> Processing Complete
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-2 text-green-600 font-bold text-lg">
+                    <CheckCircle2 size={24} /> Processing Complete
+                  </div>
+                  
+                  {(result.output_url || result.stems) && (file || urlInput || recordedBlob) && (
+                    <button
+                      onClick={() => setShowCompare(!showCompare)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                        showCompare 
+                          ? 'bg-indigo-600 text-white shadow-md hover:bg-indigo-700' 
+                          : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                      }`}
+                    >
+                      <Split size={16} />
+                      {showCompare ? 'Hide Comparison' : 'Compare Original vs New'}
+                    </button>
+                  )}
                 </div>
+
+                {/* ── Comparison View ── */}
+                <AnimatePresence>
+                  {showCompare && (
+                    <motion.div 
+                      initial={{ height: 0, opacity: 0 }} 
+                      animate={{ height: 'auto', opacity: 1 }} 
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-5 rounded-2xl border border-gray-200">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between px-1">
+                            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Original Input</span>
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+                            <audio 
+                              controls 
+                              className="w-full h-11" 
+                              src={file ? URL.createObjectURL(file) : (recordedBlob ? URL.createObjectURL(recordedBlob) : urlInput)} 
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between px-1">
+                            <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Processed Output</span>
+                          </div>
+                          <div className="bg-indigo-50/30 p-3 rounded-xl border border-indigo-100 shadow-sm shadow-indigo-50">
+                            {result.output_url ? (
+                               <audio controls className="w-full h-11" src={result.output_url} />
+                            ) : result.stems?.vocals ? (
+                               <audio controls className="w-full h-11" src={result.stems.vocals as string} />
+                            ) : (
+                               <div className="h-11 flex items-center justify-center text-sm text-gray-400">No audio preview</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Info about changes */}
+                {result.meta && Object.keys(result.meta).filter(k => k !== 'step').length > 0 && (
+                  <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-5 flex gap-4 items-start">
+                    <Info className="text-indigo-500 shrink-0 mt-0.5" size={20} />
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-indigo-900 mb-2">Processing Details</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4 text-[13px] text-indigo-800">
+                        {Object.entries(result.meta).map(([k, v]) => {
+                          if (k === 'step') return null;
+                          return (
+                            <div key={k} className="flex justify-between border-b border-indigo-100/50 pb-1">
+                              <span className="font-semibold capitalize text-indigo-900/70">{k.replace(/_/g, ' ')}</span> 
+                              <span className="text-indigo-900">{String(v)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Key/BPM result display */}
                 {result.key && result.bpm && (
