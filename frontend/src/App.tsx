@@ -8,6 +8,13 @@ import AppLayout from './components/layout/AppLayout'
 import AuthLayout from './components/layout/AuthLayout'
 import Chatbot from './components/Chatbot'
 
+// Workspace Layout
+const WorkspaceLayout = lazy(() => import('./components/layout/WorkspaceLayout'))
+const WorkspaceDashboard = lazy(() => import('./pages/agent/WorkspaceDashboard'))
+const AgentManagement = lazy(() => import('./pages/agent/AgentManagement'))
+const AgentConnections = lazy(() => import('./pages/agent/AgentConnections'))
+const KnowledgeBasePage = lazy(() => import('./pages/agent/KnowledgeBase'))
+
 const Landing = lazy(() => import('./pages/Landing'))
 const Start = lazy(() => import('./pages/Start'))
 const Login = lazy(() => import('./pages/auth/Login'))
@@ -169,7 +176,7 @@ export default function App() {
             <Route path="voices" element={<VoiceLibrary />} />
             <Route path="voices/new" element={<NewVoiceProfile />} />
             <Route path="voices/:id" element={<VoiceDetail />} />
-            <Route path="agent" element={<VoiceAgent />} />
+            <Route path="agent" element={<Navigate to="/agent/dashboard" replace />} />
             <Route path="clone" element={<ClonePage />} />
             <Route path="/generate" element={<GeneratePage />} />
             <Route path="/detection" element={<DetectionLab />} />
@@ -190,6 +197,13 @@ export default function App() {
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/studio" element={<StudioPage />} />
             <Route path="/tools" element={<VoiceTools />} />
+          </Route>
+          {/* Agent Workspace — separate layout */}
+          <Route element={<Protected><WorkspaceLayout /></Protected>}>
+            <Route path="/agent/dashboard" element={<WorkspaceDashboard />} />
+            <Route path="/agent/agents" element={<AgentManagement />} />
+            <Route path="/agent/connections" element={<AgentConnections />} />
+            <Route path="/agent/knowledge-base" element={<KnowledgeBasePage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
