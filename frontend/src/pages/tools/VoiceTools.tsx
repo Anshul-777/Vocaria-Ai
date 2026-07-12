@@ -5,12 +5,11 @@ import {
   Split, Music, Mic, Activity, BarChart2, ArrowDownCircle,
   MoveHorizontal, Filter, ChevronLeft, ChevronRight, Upload, FileAudio,
   Loader2, PlaySquare, Download, Clock, ExternalLink, Link2,
-  Zap, Copy, Search, Trash2, CheckCircle2, XCircle, ArrowRight
+  Zap, Copy, Search, Trash2, CheckCircle2, XCircle, ArrowRight, FlaskConical
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-
-const API_BASE = import.meta.env.VITE_API_URL || '';
+import api from '@/api/client';
 
 // ── Tool Registry ────────────────────────────────────────────────────────────
 
@@ -34,6 +33,18 @@ interface ExtraField {
   max?: number;
   step?: number;
   default: string | number;
+}
+
+// ── File type auto-detection for converter ──────────────────────────────────
+function detectAudioFormat(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  const map: Record<string, string> = { mp3: 'mp3', wav: 'wav', flac: 'flac', ogg: 'ogg', aac: 'aac', m4a: 'aac', wma: 'wav', webm: 'ogg', opus: 'ogg' };
+  return map[ext] || 'unknown';
+}
+
+function suggestConversionTargets(currentFormat: string): string[] {
+  const all = ['mp3', 'wav', 'flac', 'ogg', 'aac'];
+  return all.filter(f => f !== currentFormat);
 }
 
 const AUDIO_TOOLS: ToolDef[] = [
@@ -251,8 +262,7 @@ export default function VoiceTools() {
     let cancelled = false;
     const poll = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/v1/tools/status/${taskId}`);
-        const data = await res.json();
+        const { data } = await api.get(`/tools/status/${taskId}`);
 
         if (cancelled) return;
 
@@ -328,21 +338,16 @@ export default function VoiceTools() {
         formData.append(key, String(val));
       }
 
-      const res = await fetch(`${API_BASE}/api/v1/tools${activeTool.endpoint}`, {
-        method: 'POST',
-        body: formData,
+      const { data } = await api.post(`/tools${activeTool.endpoint}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.detail || 'Request failed');
-      }
 
       setTaskId(data.task_id);
       setProcessingStep('queued');
     } catch (err: any) {
       setIsProcessing(false);
-      toast.error(err.message || 'Failed to start processing.');
+      const msg = err.response?.data?.detail || err.message || 'Failed to start processing.';
+      toast.error(msg);
     }
   };
 
@@ -375,7 +380,21 @@ export default function VoiceTools() {
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0]) setFile(e.target.files[0]);
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setFile(f);
+
+    // Auto-detect format for audio converter and suggest conversion target
+    if (activeTool?.id === 'audio-converter' && f.name) {
+      const detected = detectAudioFormat(f.name);
+      if (detected !== 'unknown') {
+        const suggestions = suggestConversionTargets(detected);
+        if (suggestions.length > 0) {
+          setExtraFieldValues(prev => ({ ...prev, target_format: suggestions[0] }));
+          toast.success(`Detected ${detected.toUpperCase()} — auto-selected ${suggestions[0].toUpperCase()} as target.`, { duration: 3000 });
+        }
+      }
+    }
   };
 
   const handleClearRecents = () => {
@@ -389,25 +408,38 @@ export default function VoiceTools() {
   // ══════════════════════════════════════════════════════════════════════════
 
   return (
-    <div className="w-full min-h-[70vh] flex flex-col items-center bg-white py-12 px-4 font-sans">
+    <div className="w-full min-h-[70vh] flex flex-col items-center py-12 px-4 font-sans" style={{ background: 'var(--bg, #fff)' }}>
 
       {/* ── GRID VIEW ── */}
       {!activeTool && !showRecents && (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-5xl flex flex-col items-center">
-          <div className="w-full flex items-center justify-between mb-10">
-            <h2 className="text-3xl font-bold text-[#1a2b3c]" style={{ fontFamily: "'Inter', sans-serif" }}>
-              Explore Voice Features
-            </h2>
-            <button
-              onClick={() => setShowRecents(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-sm font-medium text-gray-700 transition-colors"
-            >
-              <Clock size={16} /> Recent ({recents.length})
-            </button>
+          <div className="w-full flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-3xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter', sans-serif", color: 'var(--fg, #1a2b3c)' }}>
+                Voice Tools
+              </h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--fg-4, #888)' }}>Professional AI-powered audio processing suite</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/quality')}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                style={{ background: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}
+              >
+                <FlaskConical size={15} /> Quality Lab
+              </button>
+              <button
+                onClick={() => setShowRecents(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors"
+                style={{ background: 'var(--bg-3, #f3f4f6)', color: 'var(--fg-3, #555)' }}
+              >
+                <Clock size={15} /> Recent ({recents.length})
+              </button>
+            </div>
           </div>
 
-          <div className="w-full flex items-center justify-between">
-            <button onClick={prevPage} className="p-2 text-[#1a2b3c] hover:text-gray-500 transition-colors">
+          <div className="w-full flex items-center justify-between mt-6">
+            <button onClick={prevPage} className="p-2 transition-colors" style={{ color: 'var(--fg, #1a2b3c)' }}>
               <ChevronLeft size={48} strokeWidth={1} />
             </button>
 
@@ -419,7 +451,7 @@ export default function VoiceTools() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -20 }}
                   transition={{ duration: 0.2 }}
-                  className="grid grid-cols-2 md:grid-cols-4 gap-y-16 gap-x-8"
+                  className="grid grid-cols-2 md:grid-cols-4 gap-y-14 gap-x-8"
                 >
                   {currentFeatures.map((feature) => {
                     const Icon = feature.icon;
@@ -429,11 +461,14 @@ export default function VoiceTools() {
                         onClick={() => openTool(feature)}
                         className="flex flex-col items-center text-center cursor-pointer group"
                       >
-                        <div className="w-16 h-16 mb-4 flex items-center justify-center text-[#1a2b3c] group-hover:scale-110 transition-transform duration-300">
-                          <Icon size={40} strokeWidth={1.5} />
+                        <div className="w-16 h-16 mb-3 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-all duration-300" style={{ background: 'var(--bg-2, #f8f9fa)', border: '1px solid var(--border-2, #eee)' }}>
+                          <Icon size={28} strokeWidth={1.5} style={{ color: 'var(--fg, #1a2b3c)' }} />
                         </div>
-                        <span className="text-[#1a2b3c] font-medium text-[15px] group-hover:text-indigo-600 transition-colors">
+                        <span className="font-semibold text-[14px] transition-colors" style={{ color: 'var(--fg-2, #333)' }}>
                           {feature.name}
+                        </span>
+                        <span className="text-[11px] mt-1 max-w-[140px] leading-tight" style={{ color: 'var(--fg-5, #aaa)' }}>
+                          {feature.description.length > 50 ? feature.description.slice(0, 48) + '…' : feature.description}
                         </span>
                       </div>
                     );
@@ -442,17 +477,18 @@ export default function VoiceTools() {
               </AnimatePresence>
             </div>
 
-            <button onClick={nextPage} className="p-2 text-[#1a2b3c] hover:text-gray-500 transition-colors">
+            <button onClick={nextPage} className="p-2 transition-colors" style={{ color: 'var(--fg, #1a2b3c)' }}>
               <ChevronRight size={48} strokeWidth={1} />
             </button>
           </div>
 
-          <div className="flex items-center gap-2 mt-12">
+          <div className="flex items-center gap-2 mt-10">
             {Array.from({ length: totalPages }).map((_, i) => (
               <button
                 key={i}
                 onClick={() => setCurrentPage(i)}
-                className={`w-2.5 h-2.5 rounded-full transition-colors ${currentPage === i ? 'bg-[#1a2b3c]' : 'bg-gray-300'}`}
+                className="w-2.5 h-2.5 rounded-full transition-all"
+                style={{ background: currentPage === i ? 'var(--fg, #1a2b3c)' : 'var(--border, #ddd)' }}
               />
             ))}
           </div>
@@ -512,21 +548,21 @@ export default function VoiceTools() {
 
       {/* ── TOOL WORKSPACE ── */}
       {activeTool && activeTool.type !== 'redirect' && (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl bg-white border border-gray-100 rounded-3xl shadow-lg overflow-hidden">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-3xl rounded-3xl shadow-lg overflow-hidden" style={{ background: 'var(--bg, #fff)', border: '1px solid var(--border-2, #eee)' }}>
           {/* Header */}
-          <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center gap-4">
+          <div className="p-6 flex items-center gap-4" style={{ borderBottom: '1px solid var(--border-2, #eee)', background: 'var(--bg-2, #f8f9fa)' }}>
             <button
               onClick={() => { setActiveToolId(null); setResult(null); }}
-              className="p-2 -ml-2 rounded-lg hover:bg-gray-200 text-gray-500 hover:text-gray-900 transition-colors"
+              className="p-2 -ml-2 rounded-lg transition-colors" style={{ color: 'var(--fg-4, #888)' }}
             >
               <ChevronLeft size={24} />
             </button>
-            <div className="w-12 h-12 rounded-xl bg-[#1a2b3c] text-white flex items-center justify-center shadow-md">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center shadow-md" style={{ background: 'var(--fg, #1a2b3c)', color: '#fff' }}>
               <activeTool.icon size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-[#1a2b3c]">{activeTool.name}</h2>
-              <p className="text-sm text-gray-500">{activeTool.description}</p>
+              <h2 className="text-xl font-bold" style={{ color: 'var(--fg, #1a2b3c)' }}>{activeTool.name}</h2>
+              <p className="text-sm" style={{ color: 'var(--fg-4, #888)' }}>{activeTool.description}</p>
             </div>
           </div>
 
