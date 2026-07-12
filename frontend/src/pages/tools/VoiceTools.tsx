@@ -1,187 +1,133 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Reveal } from '@/hooks/motionVariants';
-import { Wrench, Upload, FileAudio, Scissors, Headphones, Loader2 } from 'lucide-react';
-import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  MicOff, FileText, Activity, Palette, RefreshCw, Volume2, Paintbrush, MoveHorizontal,
+  Target, Crop, Zap, TrendingUp, Diamond, Columns, MonitorPlay, Layout, Wand2,
+  Layers, UserCircle, Presentation, ArrowDownCircle, FileEdit, Languages, Music,
+  Film, Clapperboard, Scissors, Image as ImageIcon, Filter, ChevronLeft, ChevronRight
+} from 'lucide-react';
 
-const TOOLS = [
-  {
-    id: 'vocal-remover',
-    title: 'Vocal Remover',
-    description: 'Isolate or remove vocals from any music track using AI.',
-    icon: Scissors,
-    color: 'from-blue-500 to-cyan-500',
-    bg: 'bg-blue-50',
-    text: 'text-blue-600',
-  },
-  {
-    id: 'noise-reduction',
-    title: 'Noise Reduction',
-    description: 'Clean up background noise, hums, and hiss from your voice recordings.',
-    icon: Headphones,
-    color: 'from-emerald-500 to-teal-500',
-    bg: 'bg-emerald-50',
-    text: 'text-emerald-600',
-  },
-  {
-    id: 'format-converter',
-    title: 'Audio Converter',
-    description: 'Convert audio files between MP3, WAV, FLAC, OGG, and more.',
-    icon: FileAudio,
-    color: 'from-purple-500 to-indigo-500',
-    bg: 'bg-purple-50',
-    text: 'text-purple-600',
-  },
+const ALL_FEATURES = [
+  { name: 'Silence Detection', icon: MicOff },
+  { name: 'Speech to Text', icon: FileText },
+  { name: 'Audio Visualizer', icon: Activity },
+  { name: 'Color Correction', icon: Palette },
+  { name: 'Auto Synchronization', icon: RefreshCw },
+  { name: 'Text to Speech', icon: Volume2 },
+  { name: 'Color Match', icon: Paintbrush },
+  { name: 'AI Audio Stretch', icon: MoveHorizontal },
+  { name: 'Motion Tracking', icon: Target },
+  { name: 'Auto Reframe', icon: Crop },
+  { name: 'Auto Beat Sync', icon: Activity },
+  { name: 'Speed Ramping', icon: TrendingUp },
+  { name: 'Keyframing', icon: Diamond },
+  { name: 'Split Screen', icon: Columns },
+  { name: 'Screen Recorder', icon: MonitorPlay },
+  { name: 'Instant Mode', icon: Zap },
+  { name: 'Preset Templates', icon: Layout },
+  { name: 'Video Effects', icon: Wand2 },
+  { name: 'Mask & Blend', icon: Layers },
+  { name: 'AI Portrait', icon: UserCircle },
+  { name: 'Chroma Key (Green Screen)', icon: Presentation },
+  { name: 'Audio Ducking', icon: ArrowDownCircle },
+  { name: 'AI Text-Based Editing', icon: FileEdit },
+  { name: 'AI Translation', icon: Languages },
+  { name: 'AI Music Generator', icon: Music },
+  { name: 'AI Video Interpolation', icon: Film },
+  { name: 'AI Text-To-Video', icon: Clapperboard },
+  { name: 'AI Vocal Remover', icon: Scissors },
+  { name: 'AI Thumbnail Creator', icon: ImageIcon },
+  { name: 'AI Audio Denoise', icon: Filter },
 ];
 
+const ITEMS_PER_PAGE = 8;
+
 export default function VoiceTools() {
-  const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
-    }
+  const totalPages = Math.ceil(ALL_FEATURES.length / ITEMS_PER_PAGE);
+
+  const nextPage = () => {
+    setCurrentPage((prev) => (prev + 1) % totalPages);
   };
 
-  const handleProcess = () => {
-    if (!file) {
-      toast.error('Please upload a file first.');
-      return;
-    }
-    
-    setIsProcessing(true);
-    // Simulate processing for now as backend endpoints are not defined yet
-    setTimeout(() => {
-      setIsProcessing(false);
-      toast.success(`${TOOLS.find(t => t.id === activeTool)?.title} applied successfully!`);
-      setFile(null);
-    }, 2500);
+  const prevPage = () => {
+    setCurrentPage((prev) => (prev - 1 + totalPages) % totalPages);
   };
+
+  const currentFeatures = ALL_FEATURES.slice(
+    currentPage * ITEMS_PER_PAGE,
+    (currentPage + 1) * ITEMS_PER_PAGE
+  );
 
   return (
-    <div className="w-full pb-12 max-w-6xl mx-auto space-y-8">
-      {/* Header */}
-      <Reveal>
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-3">
-              <Wrench className="w-6 h-6 text-gray-800" />
-              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-purple-500 animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>
-                Voice Tools
-              </h1>
-            </div>
-            <p className="text-gray-500 font-medium mt-1.5 text-sm">
-              A suite of AI-powered utilities for processing and enhancing audio.
-            </p>
-          </div>
-        </div>
-      </Reveal>
+    <div className="w-full min-h-[60vh] flex flex-col items-center justify-center bg-white py-16 px-4 font-sans">
+      <h2 className="text-3xl md:text-[32px] font-bold text-[#1a2b3c] mb-16" style={{ fontFamily: "'Inter', sans-serif" }}>
+        Explore More Features
+      </h2>
 
-      {/* Tools Grid */}
-      {!activeTool ? (
-        <Reveal delay={0.1}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {TOOLS.map((tool) => {
-              const Icon = tool.icon;
-              return (
-                <div 
-                  key={tool.id}
-                  onClick={() => setActiveTool(tool.id)}
-                  className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col items-start gap-4"
-                >
-                  <div className={`w-12 h-12 rounded-xl ${tool.bg} ${tool.text} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                    <Icon size={24} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900 text-lg mb-1">{tool.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed">
-                      {tool.description}
-                    </p>
-                  </div>
-                  <div className="mt-auto pt-4">
-                    <span className="text-sm font-semibold text-gray-400 group-hover:text-indigo-600 transition-colors flex items-center gap-1">
-                      Open Tool &rarr;
+      <div className="w-full max-w-5xl flex items-center justify-between">
+        {/* Left Arrow */}
+        <button 
+          onClick={prevPage}
+          className="p-2 text-[#1a2b3c] hover:text-gray-500 transition-colors disabled:opacity-30 disabled:hover:text-[#1a2b3c]"
+        >
+          <ChevronLeft size={48} strokeWidth={1} />
+        </button>
+
+        {/* Features Grid */}
+        <div className="flex-1 overflow-hidden px-8">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPage}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              transition={{ duration: 0.3 }}
+              className="grid grid-cols-2 md:grid-cols-4 gap-y-16 gap-x-8"
+            >
+              {currentFeatures.map((feature, index) => {
+                const Icon = feature.icon;
+                return (
+                  <div 
+                    key={index} 
+                    className="flex flex-col items-center text-center cursor-pointer group"
+                  >
+                    <div className="w-16 h-16 mb-4 flex items-center justify-center text-[#1a2b3c] group-hover:scale-110 transition-transform duration-300">
+                      <Icon size={40} strokeWidth={1.5} />
+                    </div>
+                    <span className="text-[#1a2b3c] font-medium text-[15px]">
+                      {feature.name}
                     </span>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        </Reveal>
-      ) : (
-        /* Active Tool Interface */
-        <Reveal className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-          {(() => {
-            const tool = TOOLS.find(t => t.id === activeTool);
-            if (!tool) return null;
-            const Icon = tool.icon;
-            return (
-              <div className="flex flex-col">
-                <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => { setActiveTool(null); setFile(null); }}
-                      className="text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors mr-2"
-                    >
-                      &larr; Back
-                    </button>
-                    <div className={`w-8 h-8 rounded-lg ${tool.bg} ${tool.text} flex items-center justify-center`}>
-                      <Icon size={16} />
-                    </div>
-                    <div>
-                      <h2 className="text-lg font-bold text-gray-900">{tool.title}</h2>
-                      <p className="text-xs text-gray-500">{tool.description}</p>
-                    </div>
-                  </div>
-                </div>
+                );
+              })}
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
-                <div className="p-8 max-w-2xl mx-auto w-full text-center space-y-6">
-                  {/* File Uploader */}
-                  <div className="space-y-2">
-                    <label className={`flex flex-col items-center justify-center border-2 border-dashed ${file ? 'border-indigo-400 bg-indigo-50' : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'} rounded-2xl p-10 cursor-pointer transition-colors`}>
-                      {file ? (
-                        <>
-                          <FileAudio className="w-10 h-10 text-indigo-500 mb-3" />
-                          <span className="text-indigo-600 font-bold text-base">{file.name}</span>
-                          <span className="text-indigo-400 text-sm mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</span>
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="w-10 h-10 text-gray-400 mb-3" />
-                          <span className="text-gray-700 font-bold text-base">Click or drag an audio file</span>
-                          <span className="text-gray-400 text-sm mt-1">MP3, WAV, FLAC (Max 50MB)</span>
-                        </>
-                      )}
-                      <input type="file" className="hidden" accept="audio/*,video/*" onChange={handleFileUpload} disabled={isProcessing} />
-                    </label>
-                  </div>
+        {/* Right Arrow */}
+        <button 
+          onClick={nextPage}
+          className="p-2 text-[#1a2b3c] hover:text-gray-500 transition-colors disabled:opacity-30 disabled:hover:text-[#1a2b3c]"
+        >
+          <ChevronRight size={48} strokeWidth={1} />
+        </button>
+      </div>
 
-                  {/* Process Button */}
-                  <button 
-                    onClick={handleProcess}
-                    disabled={isProcessing || !file}
-                    className={`w-full py-3.5 bg-gradient-to-r ${tool.color} hover:opacity-90 text-white font-bold rounded-xl shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50`}
-                  >
-                    {isProcessing ? (
-                      <><Loader2 className="w-5 h-5 animate-spin" /> Processing Audio...</>
-                    ) : (
-                      <><Icon size={18} /> Apply {tool.title}</>
-                    )}
-                  </button>
-
-                  {!isProcessing && !file && (
-                    <p className="text-xs text-gray-400 mt-4">
-                      Note: Tools are currently in beta and processes are simulated on the frontend until backend integration is finalized.
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-        </Reveal>
-      )}
+      {/* Pagination Dots (Optional, but good for UX) */}
+      <div className="flex items-center gap-2 mt-16">
+        {Array.from({ length: totalPages }).map((_, i) => (
+          <button
+            key={i}
+            onClick={() => setCurrentPage(i)}
+            className={`w-2.5 h-2.5 rounded-full transition-colors ${
+              currentPage === i ? 'bg-[#1a2b3c]' : 'bg-gray-300'
+            }`}
+            aria-label={`Go to page ${i + 1}`}
+          />
+        ))}
+      </div>
     </div>
   );
 }
