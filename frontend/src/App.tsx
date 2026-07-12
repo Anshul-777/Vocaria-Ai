@@ -41,6 +41,7 @@ const BenchmarksPage = lazy(() => import('./pages/benchmarks/BenchmarksPage'))
 const QualityPage = lazy(() => import('./pages/quality/QualityPage'))
 const AdminPage = lazy(() => import('./pages/admin/AdminPage'))
 const StudioPage = lazy(() => import('./pages/studio/StudioPage'))
+const VoiceTools = lazy(() => import('./pages/tools/VoiceTools'))
 
 function Loader() {
   const [show, setShow] = React.useState(false)
@@ -188,6 +189,7 @@ export default function App() {
             <Route path="/quality" element={<QualityPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="/studio" element={<StudioPage />} />
+            <Route path="/tools" element={<VoiceTools />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

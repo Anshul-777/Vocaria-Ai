@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Mic2, Wand2, Shield, Globe, BarChart3, CreditCard, History,
   Bell, FileText, Settings, LogOut, Menu, X, User,
-  Zap, Search, Plus, Activity, FlaskConical, Star, Gauge, HelpCircle, Bot, Video
+  Zap, Search, Plus, Activity, FlaskConical, Star, Gauge, HelpCircle, Bot, Video, Wrench
 } from 'lucide-react'
 import clsx from 'clsx'
 import { useAuthStore } from '@/store/authStore'
@@ -24,6 +24,7 @@ const NAV_SECTIONS = [
       { label: 'Generate Voice', icon: Wand2, path: '/generate', tag: 'HOT', hoverColor: 'hover:text-orange-600', hoverBg: 'hover:bg-orange-50' },
       { label: 'Clone Voice', icon: Zap, path: '/clone', hoverColor: 'hover:text-purple-600', hoverBg: 'hover:bg-purple-50' },
       { label: 'Vocaria Agent', icon: Bot, path: '/agent', tag: 'AI', hoverColor: 'hover:text-indigo-600', hoverBg: 'hover:bg-indigo-50' },
+      { label: 'Voice Tools', icon: Wrench, path: '/tools', hoverColor: 'hover:text-cyan-600', hoverBg: 'hover:bg-cyan-50' },
     ],
   },
   {
