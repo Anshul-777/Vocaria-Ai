@@ -410,28 +410,31 @@ export default function VoiceTools() {
 
       {/* ── GRID VIEW ── */}
       {!activeTool && !showRecents && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-[1400px] flex flex-col items-center">
-          <div className="w-full flex items-center justify-between mb-8 px-4">
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full space-y-8 pb-12">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-4">
             <div>
-              <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight" style={{ fontFamily: "'Inter', sans-serif", color: 'var(--fg, #1a2b3c)' }}>
-                Voice Tools
-              </h2>
-              <p className="text-sm md:text-base mt-2" style={{ color: 'var(--fg-4, #888)' }}>Professional AI-powered audio processing suite</p>
+              <div className="flex items-center gap-3">
+                <Wand2 className="w-6 h-6 text-gray-800" />
+                <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-green-600 to-emerald-500 animate-text-pan" style={{ fontFamily: "'Playfair Display', serif" }}>
+                  Voice Tools
+                </h1>
+              </div>
+              <p className="text-gray-500 font-medium mt-1.5 text-sm">
+                Professional AI-powered audio processing suite
+              </p>
             </div>
-            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2">
+            <div className="flex items-center gap-3 flex-wrap">
               <button
                 onClick={() => navigate('/quality')}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:bg-blue-100 hover:shadow-sm"
-                style={{ background: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}
+                className="btn btn-secondary flex items-center gap-2"
               >
-                <FlaskConical size={16} /> Quality Lab
+                <FlaskConical size={14} /> Quality Lab
               </button>
               <button
                 onClick={() => setShowRecents(true)}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:bg-gray-200 hover:shadow-sm"
-                style={{ background: 'var(--bg-3, #f3f4f6)', color: 'var(--fg-3, #555)' }}
+                className="btn btn-secondary flex items-center gap-2"
               >
-                <Clock size={16} /> Recent ({recents.length})
+                <Clock size={14} /> Recent ({recents.length})
               </button>
             </div>
           </div>
