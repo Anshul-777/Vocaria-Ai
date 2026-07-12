@@ -47,6 +47,12 @@ transformers>=4.46.1,<=4.46.1
 pydub==0.25.1
 webrtcvad==2.0.10
 
+# Voice Tools
+noisereduce>=3.0.0
+openai-whisper>=20231117
+spleeter>=2.4.0
+matplotlib>=3.8.0
+
 # Monitoring
 psutil==6.1.0
 prometheus-fastapi-instrumentator==7.0.0

@@ -11,6 +11,7 @@ celery_app = Celery(
         "app.workers.cloning_tasks",
         "app.workers.generation_tasks",
         "app.workers.quality_tasks",
+        "app.workers.tools_tasks",
     ],
 )
 
